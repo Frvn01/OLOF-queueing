@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="OLOF Queueing System - Our Lady of Fatima Eye Ear Nose Throat Center">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="OLOF Queue">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>OLOF Queueing System</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+
+  <!--
+    Web Audio API chime engine — bypasses Chrome autoplay restrictions.
+    The AudioContext is created lazily on the first user gesture (click/tap),
+    which permanently unlocks audio for the session.
+    Called from Flutter via window.olofChime.play()
+  -->
+  <script>
+    window.olofChime = (function () {
+      var ctx = null;
+      var unlocked = false;
+
+      function getCtx() {
+        if (!ctx) {
+          ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        return ctx;
+      }
+
+      // Resume AudioContext on any user gesture (required by Chrome autoplay policy)
+      function unlock() {
+        if (unlocked) return;
+        var c = getCtx();
+        if (c.state === 'suspended') {
+          c.resume().then(function () {
+            unlocked = true;
+          });
+        } else {
+          unlocked = true;
+        }
+      }
+
+      // Listen for the first user gesture to unlock audio
+      ['click', 'touchstart', 'keydown', 'pointerdown'].forEach(function (evt) {
+        document.addEventListener(evt, unlock, { once: false, passive: true });
+      });
+
+      // Synthesize a three-note ascending hospital chime using Web Audio API
+      // Notes: E5 → G#5 → B5  (major arpeggio, calming & distinct)
+      function playNote(frequency, startTime, duration, gainPeak, decay) {
+        var c = getCtx();
+        var osc = c.createOscillator();
+        var gain = c.createGain();
+
+        // Overtone enrichment for a bell-like timbre
+        var osc2 = c.createOscillator();
+        var gain2 = c.createGain();
+        var osc3 = c.createOscillator();
+        var gain3 = c.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(frequency, startTime);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(frequency * 2.0, startTime);
+        osc3.type = 'sine';
+        osc3.frequency.setValueAtTime(frequency * 3.0, startTime);
+
+        // Attack + exponential decay envelope
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(gainPeak, startTime + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+        gain2.gain.setValueAtTime(0, startTime);
+        gain2.gain.linearRampToValueAtTime(gainPeak * 0.30, startTime + 0.012);
+        gain2.gain.exponentialRampToValueAtTime(0.0001, startTime + duration * 0.7);
+
+        gain3.gain.setValueAtTime(0, startTime);
+        gain3.gain.linearRampToValueAtTime(gainPeak * 0.12, startTime + 0.012);
+        gain3.gain.exponentialRampToValueAtTime(0.0001, startTime + duration * 0.5);
+
+        osc.connect(gain);
+        osc2.connect(gain2);
+        osc3.connect(gain3);
+        gain.connect(c.destination);
+        gain2.connect(c.destination);
+        gain3.connect(c.destination);
+
+        osc.start(startTime);
+        osc2.start(startTime);
+        osc3.start(startTime);
+        osc.stop(startTime + duration);
+        osc2.stop(startTime + duration);
+        osc3.stop(startTime + duration);
+      }
+
+      function play() {
+        try {
+          var c = getCtx();
+          if (c.state === 'suspended') {
+            c.resume().then(function () { _doPlay(); });
+          } else {
+            _doPlay();
+          }
+        } catch (e) {
+          console.warn('OLOF Chime error:', e);
+        }
+      }
+
+      function _doPlay() {
+        var c = getCtx();
+        var now = c.currentTime;
+        // E5 = 659.25 Hz, G#5 = 830.61 Hz, B5 = 987.77 Hz
+        playNote(659.25, now + 0.05, 1.6, 0.55, 3.0);
+        playNote(830.61, now + 0.28, 1.6, 0.62, 2.8);
+        playNote(987.77, now + 0.52, 1.8, 0.70, 2.5);
+      }
+
+      return {
+        play: play,
+        unlock: unlock,
+        isUnlocked: function () { return unlocked; }
+      };
+    })();
+  </script>
+</body>
+</html>
