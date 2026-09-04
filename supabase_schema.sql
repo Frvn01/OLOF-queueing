@@ -76,9 +76,59 @@ CREATE POLICY "Allow public read/write on queue_entries"
 CREATE POLICY "Allow public read/write on visit_records" 
     ON public.visit_records FOR ALL USING (true) WITH CHECK (true);
 
--- 6. ENABLE REALTIME PUBLICATION FOR LIVE QUEUE SYNC
+-- 6. CLINIC DOCTORS & ROOMS
+CREATE TABLE IF NOT EXISTS public.clinic_doctors (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(128) NOT NULL,
+    department VARCHAR(16) NOT NULL DEFAULT 'ENT', -- 'ENT', 'EYES', 'BOTH'
+    room VARCHAR(64),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.clinic_rooms (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(64) NOT NULL,
+    department VARCHAR(16) NOT NULL DEFAULT 'BOTH', -- 'ENT', 'EYES', 'BOTH'
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.clinic_doctors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.clinic_rooms ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public read/write on clinic_doctors"
+    ON public.clinic_doctors FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow public read/write on clinic_rooms"
+    ON public.clinic_rooms FOR ALL USING (true) WITH CHECK (true);
+
+-- Pre-seed default doctors if empty
+INSERT INTO public.clinic_doctors (name, department, room)
+VALUES 
+    ('Dr. Engr. Ranulfo Ramos', 'ENT', 'Room 1'),
+    ('Dr. Ranulfo Ramos Jr.', 'EYES', 'Room 2')
+ON CONFLICT DO NOTHING;
+
+-- Pre-seed default rooms if empty
+INSERT INTO public.clinic_rooms (name, department)
+VALUES 
+    ('Room 1', 'BOTH'),
+    ('Room 2', 'BOTH'),
+    ('Room 3', 'BOTH')
+ON CONFLICT DO NOTHING;
+
+-- 7. STORAGE BUCKET FOR PATIENT PROFILE PHOTOS
+-- Run this in Supabase Dashboard > Storage, OR via SQL editor:
+-- INSERT INTO storage.buckets (id, name, public) VALUES ('patient-photos', 'patient-photos', true);
+--
+-- Then create a public access policy so the app can read/write photos:
+-- CREATE POLICY "Allow public access on patient-photos"
+--     ON storage.objects FOR ALL USING (bucket_id = 'patient-photos') WITH CHECK (bucket_id = 'patient-photos');
+
+-- 8. ENABLE REALTIME PUBLICATION FOR LIVE QUEUE SYNC
 BEGIN;
   -- Drop publication if existing or add tables
   DROP PUBLICATION IF EXISTS supabase_realtime;
-  CREATE PUBLICATION supabase_realtime FOR TABLE public.patients, public.queue_entries, public.visit_records;
+  CREATE PUBLICATION supabase_realtime FOR TABLE public.patients, public.queue_entries, public.visit_records, public.clinic_doctors, public.clinic_rooms;
 COMMIT;

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:storage_client/storage_client.dart';
 import '../models/patient.dart';
 import '../models/visit_record.dart';
 import '../services/supabase_service.dart';
@@ -106,6 +107,33 @@ class PatientRepository {
     }
     _visits.add(visit);
     await _saveToStorage();
+  }
+
+  /// Upload a patient photo to Supabase Storage and return the public URL.
+  /// [bytes] is the raw image bytes, [fileName] is e.g. "photo.jpg".
+  Future<String?> uploadPhoto(String patientId, Uint8List bytes, String fileName) async {
+    if (!isSupabase) return null;
+    try {
+      final ext = fileName.split('.').last.toLowerCase();
+      final path = 'patients/$patientId/profile.$ext';
+      await SupabaseService.client.storage
+          .from('patient-photos')
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: FileOptions(
+              upsert: true,
+              contentType: ext == 'png' ? 'image/png' : 'image/jpeg',
+            ),
+          );
+      final url = SupabaseService.client.storage
+          .from('patient-photos')
+          .getPublicUrl(path);
+      return url;
+    } catch (e) {
+      debugPrint('Photo upload error: $e');
+      return null;
+    }
   }
 
   /// Get next patient number sequence

@@ -37,7 +37,15 @@ final GoRouter appRouter = GoRouter(
       path: '/receptionist/checkin',
       builder: (context, state) {
         final patientId = state.uri.queryParameters['patientId'];
-        return CheckinScreen(patientId: patientId);
+        final doctor = state.uri.queryParameters['doctor'];
+        final room = state.uri.queryParameters['room'];
+        final dept = state.uri.queryParameters['dept'];
+        return CheckinScreen(
+          patientId: patientId,
+          initialDoctor: doctor,
+          initialRoom: room,
+          initialDept: dept,
+        );
       },
     ),
     GoRoute(

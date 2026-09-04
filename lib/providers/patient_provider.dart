@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../data/models/patient.dart';
 import '../data/models/visit_record.dart';
@@ -136,5 +137,27 @@ class PatientProvider extends ChangeNotifier {
           await _repo.getVisitHistory(record.patientId);
     }
     notifyListeners();
+  }
+
+  /// Upload a profile photo and update the patient's photo_url
+  Future<String?> uploadPatientPhoto(
+    String patientId,
+    Uint8List bytes,
+    String fileName,
+  ) async {
+    final url = await _repo.uploadPhoto(patientId, bytes, fileName);
+    if (url != null) {
+      final patient = await _repo.getPatient(patientId);
+      if (patient != null) {
+        final updated = patient.copyWith(photoUrl: url);
+        await _repo.updatePatient(updated);
+        if (_selectedPatient?.id == patientId) {
+          _selectedPatient = updated;
+        }
+        _patients = await _repo.getPatients();
+        notifyListeners();
+      }
+    }
+    return url;
   }
 }

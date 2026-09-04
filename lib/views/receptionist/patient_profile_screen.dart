@@ -1,5 +1,7 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/theme/app_colors.dart';
@@ -9,6 +11,7 @@ import '../../data/models/patient.dart';
 import '../../data/models/visit_record.dart';
 import '../../shared/widgets/olof_logo.dart';
 import '../../providers/theme_provider.dart';
+import '../../shared/widgets/photo_source_dialog.dart';
 
 /// Patient profile screen with details and visit history
 class PatientProfileScreen extends StatefulWidget {
@@ -21,6 +24,9 @@ class PatientProfileScreen extends StatefulWidget {
 }
 
 class _PatientProfileScreenState extends State<PatientProfileScreen> {
+  bool _uploadingPhoto = false;
+  final ImagePicker _picker = ImagePicker();
+
   @override
   void initState() {
     super.initState();
@@ -99,6 +105,55 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
           ),
           const SizedBox(width: 2),
           const OlofLogo(size: 34, showBorder: true),
+          const SizedBox(width: 8),
+          // ── Profile Avatar in header ───────────────────────────────
+          GestureDetector(
+            onTap: () => _changePhoto(context, patient),
+            child: Stack(
+              alignment: Alignment.bottomRight,
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor:
+                      isDark ? AppColors.surfaceLight : AppColors.lightSurfaceMid,
+                  backgroundImage: patient.photoUrl != null && patient.photoUrl!.isNotEmpty
+                      ? NetworkImage(patient.photoUrl!)
+                      : null,
+                  child: patient.photoUrl == null || patient.photoUrl!.isEmpty
+                      ? Icon(Icons.person_rounded, size: 22, color: subtitleColor)
+                      : null,
+                ),
+                if (_uploadingPhoto)
+                  const Positioned.fill(
+                    child: CircleAvatar(
+                      radius: 20,
+                      backgroundColor: Colors.black38,
+                      child: SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: headerBg,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: const Icon(Icons.camera_alt_rounded, size: 10, color: Colors.white),
+                  ),
+              ],
+            ),
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -187,6 +242,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     final cardBg = isDark ? AppColors.surfaceMid : AppColors.lightSurface;
     final borderColor = isDark ? AppColors.surfaceLight : AppColors.lightBorder;
     final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
 
     return Container(
       padding: EdgeInsets.all(isCompact ? 16 : 22),
@@ -204,6 +260,105 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Profile Photo + Name Card ────────────────────────────
+          Row(
+            children: [
+              // Avatar
+              Stack(
+                alignment: Alignment.bottomRight,
+                children: [
+                  Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isDark ? AppColors.surfaceLight : AppColors.lightSurfaceMid,
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.4),
+                        width: 2.5,
+                      ),
+                      image: patient.photoUrl != null && patient.photoUrl!.isNotEmpty
+                          ? DecorationImage(
+                              image: NetworkImage(patient.photoUrl!),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
+                    ),
+                    child: patient.photoUrl == null || patient.photoUrl!.isEmpty
+                        ? Icon(Icons.person_rounded, size: 34, color: subtitleColor)
+                        : null,
+                  ),
+                  GestureDetector(
+                    onTap: _uploadingPhoto ? null : () => _changePhoto(context, patient),
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: _uploadingPhoto ? Colors.grey : AppColors.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: cardBg,
+                          width: 2,
+                        ),
+                      ),
+                      child: _uploadingPhoto
+                          ? const SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.camera_alt_rounded, size: 13, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      patient.fullName,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: titleColor,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${patient.age} yrs old  •  ${patient.sex}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: subtitleColor,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        patient.patientNo,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primary,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
           Text(
             'Patient Medical Profile',
             style: TextStyle(
@@ -493,5 +648,48 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
         ],
       ),
     );
+  }
+
+  /// Pick a new photo and upload it for the given patient
+  Future<void> _changePhoto(BuildContext context, Patient patient) async {
+    if (_uploadingPhoto) return;
+
+    final isDark = context.read<ThemeProvider>().isDarkMode;
+    final source = await showPhotoSourceDialog(context, isDark: isDark);
+    if (source == null) return;
+
+    try {
+      final XFile? picked = await _picker.pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: 600,
+        maxHeight: 600,
+      );
+      if (picked == null) return;
+      final Uint8List bytes = await picked.readAsBytes();
+      setState(() => _uploadingPhoto = true);
+      if (!context.mounted) return;
+      await context.read<PatientProvider>().uploadPatientPhoto(
+            patient.id,
+            bytes,
+            picked.name.isNotEmpty ? picked.name : 'photo.jpg',
+          );
+      setState(() => _uploadingPhoto = false);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile photo updated successfully'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _uploadingPhoto = false);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update photo: $e')),
+        );
+      }
+    }
   }
 }

@@ -774,7 +774,7 @@ packages:
     source: hosted
     version: "1.12.1"
   storage_client:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: storage_client
       sha256: b16aaaadcef812fda31fca056f50fb3485afe64f94e5d537d30f485ed55dec5e

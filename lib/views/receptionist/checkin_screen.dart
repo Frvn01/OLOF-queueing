@@ -9,12 +9,26 @@ import '../../data/models/patient.dart';
 import '../../shared/widgets/qr_scanner_dialog.dart';
 import '../../shared/widgets/olof_logo.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/clinic_provider.dart';
+import '../../data/models/doctor.dart';
+import '../../data/models/clinic_room.dart';
+import '../../shared/widgets/searchable_picker_dialog.dart';
+import 'widgets/clinic_management_dialog.dart';
 
 /// Check-in screen — select department and purpose, then join queue
 class CheckinScreen extends StatefulWidget {
   final String? patientId;
+  final String? initialDoctor;
+  final String? initialRoom;
+  final String? initialDept;
 
-  const CheckinScreen({super.key, this.patientId});
+  const CheckinScreen({
+    super.key,
+    this.patientId,
+    this.initialDoctor,
+    this.initialRoom,
+    this.initialDept,
+  });
 
   @override
   State<CheckinScreen> createState() => _CheckinScreenState();
@@ -24,6 +38,8 @@ class _CheckinScreenState extends State<CheckinScreen> {
   Patient? _patient;
   String? _selectedDepartment;
   String? _selectedPurpose;
+  Doctor? _selectedDoctor;
+  ClinicRoom? _selectedRoom;
   bool _isLoading = true;
   bool _isSubmitting = false;
   String? _assignedQueueNumber;
@@ -34,10 +50,42 @@ class _CheckinScreenState extends State<CheckinScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialDept != null && widget.initialDept!.isNotEmpty) {
+      _selectedDepartment = widget.initialDept;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initInitialDoctorAndRoom();
+    });
     if (widget.patientId != null) {
       _loadPatient(widget.patientId!);
     } else {
       setState(() => _isLoading = false);
+    }
+  }
+
+  void _initInitialDoctorAndRoom() {
+    final clinic = context.read<ClinicProvider>();
+    if (widget.initialDoctor != null && widget.initialDoctor!.isNotEmpty) {
+      try {
+        final doc = clinic.doctors.firstWhere(
+          (d) => d.name.toLowerCase() == widget.initialDoctor!.toLowerCase(),
+        );
+        setState(() {
+          _selectedDoctor = doc;
+          if (_selectedDepartment == null && doc.department != 'BOTH') {
+            _selectedDepartment = doc.department;
+          }
+        });
+      } catch (_) {}
+    }
+
+    if (widget.initialRoom != null && widget.initialRoom!.isNotEmpty) {
+      try {
+        final r = clinic.rooms.firstWhere(
+          (rm) => rm.name.toLowerCase() == widget.initialRoom!.toLowerCase(),
+        );
+        setState(() => _selectedRoom = r);
+      } catch (_) {}
     }
   }
 
@@ -415,6 +463,40 @@ class _CheckinScreenState extends State<CheckinScreen> {
                   );
                 }).toList(),
               ),
+                     const SizedBox(height: 24),
+
+              // Doctor & Room Selection (Optional)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Assign Doctor & Room (Optional)',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: titleColor,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => showClinicManagementDialog(context, isDark: isDark),
+                    icon: const Icon(Icons.settings_rounded, size: 15),
+                    label: const Text('Setup'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // Doctor Selector
+              _buildDoctorSelector(context, isDark),
+              const SizedBox(height: 10),
+
+              // Room Selector
+              _buildRoomSelector(context, isDark),
+
               const SizedBox(height: 32),
 
               // Submit
@@ -441,6 +523,230 @@ class _CheckinScreenState extends State<CheckinScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDoctorSelector(BuildContext context, bool isDark) {
+    final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
+    final cardBg = isDark ? AppColors.surfaceLight.withValues(alpha: 0.4) : AppColors.lightBg;
+    final borderColor = isDark ? AppColors.surfaceLight : AppColors.lightBorder;
+
+    return Consumer<ClinicProvider>(
+      builder: (context, clinic, _) {
+        final hasDoctor = _selectedDoctor != null;
+
+        return Material(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            onTap: () async {
+              final doctors = clinic.getDoctors();
+              final items = doctors
+                  .map((d) => PickerItem<Doctor>(
+                        value: d,
+                        title: d.name,
+                        subtitle: d.room != null && d.room!.isNotEmpty
+                            ? 'Specialty: ${d.department} • Default Room: ${d.room}'
+                            : 'Specialty: ${d.department}',
+                        department: d.department,
+                        icon: Icons.person_pin_rounded,
+                      ))
+                  .toList();
+
+              final picked = await showSearchablePicker<Doctor>(
+                context,
+                title: 'Select Attending Doctor',
+                searchHint: 'Search doctor name or specialty...',
+                items: items,
+                selectedValue: _selectedDoctor,
+                isDark: isDark,
+                addNewLabel: '+ Add Doctor',
+                onAddNew: () => showClinicManagementDialog(context, isDark: isDark, initialTab: 0),
+              );
+
+              setState(() {
+                _selectedDoctor = picked;
+                if (picked != null && _selectedDepartment == null && picked.department != 'BOTH') {
+                  _selectedDepartment = picked.department;
+                }
+                if (picked != null && _selectedRoom == null && picked.room != null) {
+                  try {
+                    _selectedRoom = clinic.rooms.firstWhere(
+                      (r) => r.name.toLowerCase() == picked.room!.toLowerCase(),
+                    );
+                  } catch (_) {}
+                }
+              });
+            },
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: hasDoctor ? AppColors.primary : borderColor,
+                  width: hasDoctor ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.medical_services_rounded,
+                        color: AppColors.primary, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          hasDoctor ? _selectedDoctor!.name : 'Choose Doctor',
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            color: hasDoctor ? titleColor : subtitleColor,
+                          ),
+                        ),
+                        Text(
+                          hasDoctor
+                              ? '${_selectedDoctor!.department} Attending Physician'
+                              : 'Tap to filter and select doctor with search',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: subtitleColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (hasDoctor)
+                    IconButton(
+                      icon: const Icon(Icons.clear_rounded, size: 18),
+                      color: subtitleColor,
+                      onPressed: () => setState(() => _selectedDoctor = null),
+                      tooltip: 'Clear Doctor',
+                    )
+                  else
+                    Icon(Icons.keyboard_arrow_down_rounded, color: subtitleColor),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRoomSelector(BuildContext context, bool isDark) {
+    final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
+    final cardBg = isDark ? AppColors.surfaceLight.withValues(alpha: 0.4) : AppColors.lightBg;
+    final borderColor = isDark ? AppColors.surfaceLight : AppColors.lightBorder;
+
+    return Consumer<ClinicProvider>(
+      builder: (context, clinic, _) {
+        final hasRoom = _selectedRoom != null;
+
+        return Material(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            onTap: () async {
+              final rooms = clinic.getRooms();
+              final items = rooms
+                  .map((r) => PickerItem<ClinicRoom>(
+                        value: r,
+                        title: r.name,
+                        subtitle: 'Department: ${r.department}',
+                        department: r.department,
+                        icon: Icons.meeting_room_rounded,
+                      ))
+                  .toList();
+
+              final picked = await showSearchablePicker<ClinicRoom>(
+                context,
+                title: 'Select Consultation Room',
+                searchHint: 'Search room name or number...',
+                items: items,
+                selectedValue: _selectedRoom,
+                isDark: isDark,
+                addNewLabel: '+ Add Room',
+                onAddNew: () => showClinicManagementDialog(context, isDark: isDark, initialTab: 1),
+              );
+
+              setState(() => _selectedRoom = picked);
+            },
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: hasRoom ? AppColors.primary : borderColor,
+                  width: hasRoom ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppColors.cyanCalm.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.door_sliding_rounded,
+                        color: AppColors.cyanCalm, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          hasRoom ? _selectedRoom!.name : 'Choose Consultation Room',
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            color: hasRoom ? titleColor : subtitleColor,
+                          ),
+                        ),
+                        Text(
+                          hasRoom
+                              ? 'Assigned to ${_selectedRoom!.name} (${_selectedRoom!.department})'
+                              : 'Tap to filter and select room with search',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: subtitleColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (hasRoom)
+                    IconButton(
+                      icon: const Icon(Icons.clear_rounded, size: 18),
+                      color: subtitleColor,
+                      onPressed: () => setState(() => _selectedRoom = null),
+                      tooltip: 'Clear Room',
+                    )
+                  else
+                    Icon(Icons.keyboard_arrow_down_rounded, color: subtitleColor),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -481,18 +787,20 @@ class _CheckinScreenState extends State<CheckinScreen> {
         child: Column(
           children: [
             Container(
-              width: 46,
-              height: 46,
+              width: 50,
+              height: 50,
               decoration: BoxDecoration(
-                gradient: isSelected ? gradient : null,
-                color: isSelected ? null : color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
+                gradient: gradient,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.35),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
-              child: Icon(
-                icon,
-                size: 24,
-                color: isSelected ? Colors.white : color,
-              ),
+              child: Icon(icon, color: Colors.white, size: 26),
             ),
             const SizedBox(height: 10),
             Text(
@@ -500,20 +808,18 @@ class _CheckinScreenState extends State<CheckinScreen> {
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w900,
-                color: isSelected ? color : titleColor,
+                color: titleColor,
               ),
             ),
             const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w600,
-                color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary,
+                color: isSelected ? color : AppColors.textSecondary,
               ),
               textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -578,35 +884,28 @@ class _CheckinScreenState extends State<CheckinScreen> {
                           ? 'ENT Department'
                           : 'EYES Department',
                       style: const TextStyle(
-                        fontSize: 14.5,
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        color: Colors.white70,
                       ),
                     ),
+                    if (_selectedRoom != null || _selectedDoctor != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Proceed to ${_selectedRoom?.name ?? _selectedDoctor?.room ?? "Consultation Room"}${_selectedDoctor != null ? " • ${_selectedDoctor!.name}" : ""}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
                   ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                _patient?.displayName ?? '',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: titleColor,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                'Purpose: $_selectedPurpose',
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                  color: subtitleColor,
                 ),
               ),
               const SizedBox(height: 20),
               Text(
-                'Please watch and listen for your number on the TV display.',
+                'Ticket has been synced with the Doctor station and Waiting Area TV Display.',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -646,6 +945,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
             patientPhoto: _patient!.photoUrl,
             department: _selectedDepartment!,
             purpose: _selectedPurpose!,
+            room: _selectedRoom?.name ?? _selectedDoctor?.room,
           );
 
       setState(() {

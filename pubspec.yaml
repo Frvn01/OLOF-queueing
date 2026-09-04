@@ -19,6 +19,7 @@ dependencies:
 
   # Backend
   supabase_flutter: ^2.9.0
+  storage_client: ^2.8.0
 
   # QR Code
   qr_flutter: ^4.1.0

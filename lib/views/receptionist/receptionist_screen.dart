@@ -7,6 +7,7 @@ import '../../providers/queue_provider.dart';
 import '../../shared/widgets/olof_logo.dart';
 import '../../shared/widgets/tutorial_dialog.dart';
 import '../../providers/theme_provider.dart';
+import 'widgets/clinic_management_dialog.dart';
 
 /// Receptionist Dashboard — main hub for registration and check-in
 class ReceptionistScreen extends StatefulWidget {
@@ -41,7 +42,6 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
     final mq = MediaQuery.of(context);
     final screenWidth = mq.size.width;
     final isLandscape = mq.orientation == Orientation.landscape;
-    // In landscape on phones the width is wide enough, treat as non-compact
     final isCompact = screenWidth < 600 && !isLandscape;
 
     return Scaffold(
@@ -146,6 +146,12 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
                 ),
               ],
             ),
+          ),
+          // Doctors & Rooms Setup Button
+          IconButton(
+            icon: const Icon(Icons.medical_services_outlined, color: AppColors.primary),
+            tooltip: 'Manage Doctors & Rooms',
+            onPressed: () => showClinicManagementDialog(context, isDark: isDark),
           ),
           // Tutorial Button
           IconButton(
@@ -253,14 +259,27 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
         gradient: AppColors.entGradient,
         onTap: () => context.go('/receptionist/checkin'),
       ),
+      _QuickAction(
+        icon: Icons.medical_services_rounded,
+        label: 'Doctors & Rooms',
+        sublabel: 'Add & manage clinic staff & rooms',
+        gradient: const LinearGradient(
+          colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        onTap: () => showClinicManagementDialog(context, isDark: isDark),
+      ),
     ];
 
     if (!isCompact) {
       return Row(
         children: [
           Expanded(child: _buildActionCard(context, actions[0], isDark)),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(child: _buildActionCard(context, actions[1], isDark)),
+          const SizedBox(width: 14),
+          Expanded(child: _buildActionCard(context, actions[2], isDark)),
         ],
       );
     }
@@ -269,6 +288,8 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
         _buildActionCard(context, actions[0], isDark),
         const SizedBox(height: 12),
         _buildActionCard(context, actions[1], isDark),
+        const SizedBox(height: 12),
+        _buildActionCard(context, actions[2], isDark),
       ],
     );
   }

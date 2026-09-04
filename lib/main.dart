@@ -4,6 +4,7 @@ import 'app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/constants/app_constants.dart';
 import 'data/services/supabase_service.dart';
+import 'providers/clinic_provider.dart';
 import 'providers/patient_provider.dart';
 import 'providers/queue_provider.dart';
 import 'providers/theme_provider.dart';
@@ -36,6 +37,7 @@ class OlofQueueingApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => PatientProvider()),
         ChangeNotifierProvider(create: (_) => QueueProvider()),
+        ChangeNotifierProvider(create: (_) => ClinicProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProv, _) {

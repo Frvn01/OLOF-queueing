@@ -1,5 +1,7 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/theme/app_colors.dart';
@@ -8,6 +10,12 @@ import '../../providers/patient_provider.dart';
 import '../../data/models/patient.dart';
 import '../../shared/widgets/olof_logo.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/clinic_provider.dart';
+import '../../data/models/doctor.dart';
+import '../../data/models/clinic_room.dart';
+import '../../shared/widgets/photo_source_dialog.dart';
+import '../../shared/widgets/searchable_picker_dialog.dart';
+import 'widgets/clinic_management_dialog.dart';
 
 /// New patient registration form — Responsive multi-step wizard
 class RegisterScreen extends StatefulWidget {
@@ -40,6 +48,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _civilStatus = 'Single';
   bool _isSubmitting = false;
   Patient? _registeredPatient;
+
+  // Photo picker state
+  Uint8List? _photoBytes;
+  String _photoFileName = 'photo.jpg';
+  final ImagePicker _picker = ImagePicker();
+
+  // Doctor & Room selection state
+  Doctor? _selectedDoctor;
+  ClinicRoom? _selectedRoom;
 
   @override
   void dispose() {
@@ -419,12 +436,73 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _buildPersonalInfoStep(bool isDark, bool isCompact, bool isLandscape) {
     final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
     // Use side-by-side rows in landscape OR on wide screens
     final useRows = !isCompact || isLandscape;
     final gap = isLandscape ? 12.0 : 16.0;
 
     return Column(
       children: [
+        // ── Photo Picker ──────────────────────────────────────────────
+        Center(
+          child: Column(
+            children: [
+              GestureDetector(
+                onTap: _pickPhoto,
+                child: Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    Container(
+                      width: isLandscape ? 80 : 100,
+                      height: isLandscape ? 80 : 100,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isDark ? AppColors.surfaceLight : AppColors.lightSurfaceMid,
+                        border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.5),
+                          width: 2.5,
+                        ),
+                        image: _photoBytes != null
+                            ? DecorationImage(
+                                image: MemoryImage(_photoBytes!),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                      ),
+                      child: _photoBytes == null
+                          ? Icon(
+                              Icons.person_rounded,
+                              size: isLandscape ? 38 : 48,
+                              color: subtitleColor,
+                            )
+                          : null,
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isDark ? AppColors.surfaceMid : AppColors.lightSurface,
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+              if (!isLandscape) const SizedBox(height: 6),
+              if (!isLandscape)
+                Text(
+                  _photoBytes != null ? 'Tap to change photo' : 'Tap to add photo (optional)',
+                  style: TextStyle(fontSize: 12, color: subtitleColor, fontWeight: FontWeight.w500),
+                ),
+            ],
+          ),
+        ),
+        SizedBox(height: isLandscape ? 10 : 18),
+
         // Last Name & First Name — always side by side in landscape
         if (useRows)
           Row(
@@ -793,7 +871,266 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
           maxLines: maxLines,
         ),
+        SizedBox(height: gap + 4),
+
+        // ── Doctor & Room Assignment (Optional) ───────────────
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Assign Doctor & Room (Optional)',
+              style: TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w800,
+                color: titleColor,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => showClinicManagementDialog(context, isDark: isDark),
+              icon: const Icon(Icons.settings_rounded, size: 14),
+              label: const Text('Clinic Setup'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+
+        if (isLandscape)
+          Row(
+            children: [
+              Expanded(child: _buildDoctorField(context, isDark)),
+              const SizedBox(width: 14),
+              Expanded(child: _buildRoomField(context, isDark)),
+            ],
+          )
+        else ...[
+          _buildDoctorField(context, isDark),
+          SizedBox(height: gap),
+          _buildRoomField(context, isDark),
+        ],
       ],
+    );
+  }
+
+  Widget _buildDoctorField(BuildContext context, bool isDark) {
+    final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
+    final cardBg = isDark ? AppColors.surfaceLight.withValues(alpha: 0.35) : AppColors.lightBg;
+    final borderColor = isDark ? AppColors.surfaceLight : AppColors.lightBorder;
+
+    return Consumer<ClinicProvider>(
+      builder: (context, clinic, _) {
+        final hasDoctor = _selectedDoctor != null;
+
+        return Material(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            onTap: () async {
+              final doctors = clinic.getDoctors();
+              final items = doctors
+                  .map((d) => PickerItem<Doctor>(
+                        value: d,
+                        title: d.name,
+                        subtitle: d.room != null && d.room!.isNotEmpty
+                            ? 'Specialty: ${d.department} • Default Room: ${d.room}'
+                            : 'Specialty: ${d.department}',
+                        department: d.department,
+                        icon: Icons.person_pin_rounded,
+                      ))
+                  .toList();
+
+              final picked = await showSearchablePicker<Doctor>(
+                context,
+                title: 'Select Attending Doctor',
+                searchHint: 'Search doctor by name or specialty...',
+                items: items,
+                selectedValue: _selectedDoctor,
+                isDark: isDark,
+                addNewLabel: '+ Add Doctor',
+                onAddNew: () => showClinicManagementDialog(context, isDark: isDark, initialTab: 0),
+              );
+
+              setState(() {
+                _selectedDoctor = picked;
+                if (picked != null && _selectedRoom == null && picked.room != null) {
+                  try {
+                    _selectedRoom = clinic.rooms.firstWhere(
+                      (r) => r.name.toLowerCase() == picked.room!.toLowerCase(),
+                    );
+                  } catch (_) {}
+                }
+              });
+            },
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: hasDoctor ? AppColors.primary : borderColor,
+                  width: hasDoctor ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.medical_services_rounded,
+                        color: AppColors.primary, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          hasDoctor ? _selectedDoctor!.name : 'Assign Doctor',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: hasDoctor ? titleColor : subtitleColor,
+                          ),
+                        ),
+                        Text(
+                          hasDoctor
+                              ? '${_selectedDoctor!.department} Specialist'
+                              : 'Filter with search & department',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: subtitleColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (hasDoctor)
+                    IconButton(
+                      icon: const Icon(Icons.clear_rounded, size: 18),
+                      color: subtitleColor,
+                      onPressed: () => setState(() => _selectedDoctor = null),
+                    )
+                  else
+                    Icon(Icons.keyboard_arrow_down_rounded, color: subtitleColor),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRoomField(BuildContext context, bool isDark) {
+    final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
+    final cardBg = isDark ? AppColors.surfaceLight.withValues(alpha: 0.35) : AppColors.lightBg;
+    final borderColor = isDark ? AppColors.surfaceLight : AppColors.lightBorder;
+
+    return Consumer<ClinicProvider>(
+      builder: (context, clinic, _) {
+        final hasRoom = _selectedRoom != null;
+
+        return Material(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            onTap: () async {
+              final rooms = clinic.getRooms();
+              final items = rooms
+                  .map((r) => PickerItem<ClinicRoom>(
+                        value: r,
+                        title: r.name,
+                        subtitle: 'Department: ${r.department}',
+                        department: r.department,
+                        icon: Icons.meeting_room_rounded,
+                      ))
+                  .toList();
+
+              final picked = await showSearchablePicker<ClinicRoom>(
+                context,
+                title: 'Select Consultation Room',
+                searchHint: 'Search room name or number...',
+                items: items,
+                selectedValue: _selectedRoom,
+                isDark: isDark,
+                addNewLabel: '+ Add Room',
+                onAddNew: () => showClinicManagementDialog(context, isDark: isDark, initialTab: 1),
+              );
+
+              setState(() => _selectedRoom = picked);
+            },
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: hasRoom ? AppColors.primary : borderColor,
+                  width: hasRoom ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.cyanCalm.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.door_sliding_rounded,
+                        color: AppColors.cyanCalm, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          hasRoom ? _selectedRoom!.name : 'Assign Room',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: hasRoom ? titleColor : subtitleColor,
+                          ),
+                        ),
+                        Text(
+                          hasRoom
+                              ? '${_selectedRoom!.name} (${_selectedRoom!.department})'
+                              : 'Filter with search & department',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: subtitleColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (hasRoom)
+                    IconButton(
+                      icon: const Icon(Icons.clear_rounded, size: 18),
+                      color: subtitleColor,
+                      onPressed: () => setState(() => _selectedRoom = null),
+                    )
+                  else
+                    Icon(Icons.keyboard_arrow_down_rounded, color: subtitleColor),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -984,8 +1321,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
           children: [
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: () => context.go(
-                    '/receptionist/checkin?patientId=${patient.id}'),
+                onPressed: () {
+                  final doctorParam = Uri.encodeComponent(_selectedDoctor?.name ?? '');
+                  final roomParam = Uri.encodeComponent(_selectedRoom?.name ?? '');
+                  final deptParam = Uri.encodeComponent(_selectedDoctor?.department ?? '');
+                  context.go(
+                      '/receptionist/checkin?patientId=${patient.id}&doctor=$doctorParam&room=$roomParam&dept=$deptParam');
+                },
                 icon: const Icon(Icons.login_rounded, size: 18),
                 label: const Text('Check In'),
                 style: ElevatedButton.styleFrom(
@@ -1095,6 +1437,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 : null,
           );
 
+      // Upload photo if one was selected
+      if (_photoBytes != null && mounted) {
+        await context.read<PatientProvider>().uploadPatientPhoto(
+              patient.id,
+              _photoBytes!,
+              _photoFileName,
+            );
+      }
+
       setState(() {
         _registeredPatient = patient;
         _isSubmitting = false;
@@ -1104,6 +1455,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error registering patient: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickPhoto() async {
+    final themeProv = context.read<ThemeProvider>();
+    final source = await showPhotoSourceDialog(
+      context,
+      isDark: themeProv.isDarkMode,
+    );
+    if (source == null) return;
+
+    try {
+      final XFile? picked = await _picker.pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: 600,
+        maxHeight: 600,
+      );
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      setState(() {
+        _photoBytes = bytes;
+        _photoFileName = picked.name.isNotEmpty ? picked.name : 'photo.jpg';
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not pick image: $e')),
         );
       }
     }

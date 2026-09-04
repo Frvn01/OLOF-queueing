@@ -61,6 +61,7 @@ class QueueProvider extends ChangeNotifier {
     String? patientPhoto,
     required String department,
     required String purpose,
+    String? room,
   }) async {
     final queueNumber = _repo.getNextQueueNumber(department);
     final entry = QueueEntry(
@@ -71,6 +72,7 @@ class QueueProvider extends ChangeNotifier {
       department: department,
       queueNumber: queueNumber,
       purpose: purpose,
+      assignedRoom: room,
       dateKey: DateHelper.todayKey(),
     );
 
