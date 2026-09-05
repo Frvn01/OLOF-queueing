@@ -107,6 +107,19 @@ class ClinicProvider extends ChangeNotifier {
         r.isActive && (r.department.toUpperCase() == dept || r.department.toUpperCase() == 'BOTH')));
   }
 
+  /// Find doctor assigned to a specific room
+  Doctor? getDoctorForRoom(String? roomName) {
+    if (roomName == null || roomName.trim().isEmpty) return null;
+    try {
+      final cleanRoom = roomName.trim().toLowerCase();
+      return _doctors.firstWhere(
+        (d) => d.isActive && d.room != null && d.room!.trim().toLowerCase() == cleanRoom,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Add a doctor one-by-one
   Future<Doctor> addDoctor({
     required String name,

@@ -95,9 +95,38 @@ class _CheckinScreenState extends State<CheckinScreen> {
     super.dispose();
   }
 
+  void _applyPatientDefaults(Patient patient) {
+    final clinic = context.read<ClinicProvider>();
+    if (_selectedDoctor == null && patient.assignedDoctor != null && patient.assignedDoctor!.isNotEmpty) {
+      try {
+        final doc = clinic.doctors.firstWhere(
+          (d) => d.name.toLowerCase() == patient.assignedDoctor!.toLowerCase(),
+        );
+        _selectedDoctor = doc;
+        if (_selectedDepartment == null && doc.department != 'BOTH') {
+          _selectedDepartment = doc.department;
+        }
+      } catch (_) {}
+    }
+
+    if (_selectedRoom == null && patient.assignedRoom != null && patient.assignedRoom!.isNotEmpty) {
+      try {
+        final r = clinic.rooms.firstWhere(
+          (rm) => rm.name.toLowerCase() == patient.assignedRoom!.toLowerCase(),
+        );
+        _selectedRoom = r;
+      } catch (_) {}
+    }
+
+    _selectedPurpose ??= 'Consultation';
+  }
+
   Future<void> _loadPatient(String id) async {
     final patient =
         await context.read<PatientProvider>().getPatientById(id);
+    if (patient != null) {
+      _applyPatientDefaults(patient);
+    }
     setState(() {
       _patient = patient;
       _isLoading = false;
@@ -110,6 +139,9 @@ class _CheckinScreenState extends State<CheckinScreen> {
     setState(() => _isLoading = true);
     final patient =
         await context.read<PatientProvider>().getPatientByNo(no);
+    if (patient != null) {
+      _applyPatientDefaults(patient);
+    }
     setState(() {
       _patient = patient;
       _isLoading = false;
@@ -945,7 +977,8 @@ class _CheckinScreenState extends State<CheckinScreen> {
             patientPhoto: _patient!.photoUrl,
             department: _selectedDepartment!,
             purpose: _selectedPurpose!,
-            room: _selectedRoom?.name ?? _selectedDoctor?.room,
+            doctor: _selectedDoctor?.name ?? _patient!.assignedDoctor,
+            room: _selectedRoom?.name ?? _selectedDoctor?.room ?? _patient!.assignedRoom,
           );
 
       setState(() {

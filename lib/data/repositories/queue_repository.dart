@@ -5,16 +5,19 @@ import '../../core/utils/helpers.dart';
 
 /// Queue CRUD operations — Supabase with in-memory fallback
 class QueueRepository {
-  List<QueueEntry> _entries = [];
+  final List<QueueEntry> _entries = [];
   bool _loaded = false;
+  String _lastLoadedDateKey = '';
   final Map<String, int> _counters = {}; // department -> sequence
 
   bool get isSupabase => SupabaseService.isConfigured;
 
-  /// Load today's queue
+  /// Load today's queue (auto-detects new day and resets to 001)
   Future<List<QueueEntry>> getTodayQueue() async {
-    if (!_loaded) await _loadFromStorage();
     final today = DateHelper.todayKey();
+    if (!_loaded || _lastLoadedDateKey != today) {
+      await _loadFromStorage();
+    }
     return _entries.where((e) => e.dateKey == today).toList()
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
   }
@@ -50,6 +53,17 @@ class QueueRepository {
             .insert(entry.toJson());
       } catch (e) {
         debugPrint('Supabase queue insert error: $e');
+        if (e.toString().contains('assigned_doctor')) {
+          try {
+            final fallback = Map<String, dynamic>.from(entry.toJson())
+              ..remove('assigned_doctor');
+            await SupabaseService.client
+                .from('queue_entries')
+                .insert(fallback);
+          } catch (e2) {
+            debugPrint('Supabase queue fallback insert error: $e2');
+          }
+        }
       }
     }
     _entries.add(entry);
@@ -74,6 +88,18 @@ class QueueRepository {
             .eq('id', entry.id);
       } catch (e) {
         debugPrint('Supabase queue update error: $e');
+        if (e.toString().contains('assigned_doctor')) {
+          try {
+            final fallback = Map<String, dynamic>.from(entry.toJson())
+              ..remove('assigned_doctor');
+            await SupabaseService.client
+                .from('queue_entries')
+                .update(fallback)
+                .eq('id', entry.id);
+          } catch (e2) {
+            debugPrint('Supabase queue fallback update error: $e2');
+          }
+        }
       }
     }
     final idx = _entries.indexWhere((e) => e.id == entry.id);
@@ -82,16 +108,16 @@ class QueueRepository {
   }
 
   /// Call the next patient in a department
-  Future<QueueEntry?> callNext(String department, String room) async {
+  Future<QueueEntry?> callNext(String department) async {
     final waiting = await getWaiting(department);
     final waitingOnly =
         waiting.where((e) => e.isWaiting).toList();
     if (waitingOnly.isEmpty) return null;
 
     final next = waitingOnly.first;
+    // Use patient's pre-assigned room and doctor from check-in
     final updated = next.copyWith(
       status: 'serving',
-      assignedRoom: room,
       calledAt: DateTime.now(),
     );
     return updateEntry(updated);
@@ -132,6 +158,21 @@ class QueueRepository {
     return updateEntry(updated);
   }
 
+  /// Remove a patient from the queue entirely
+  Future<void> removeEntry(String entryId) async {
+    if (isSupabase) {
+      try {
+        await SupabaseService.client
+            .from('queue_entries')
+            .delete()
+            .eq('id', entryId);
+      } catch (e) {
+        debugPrint('Supabase queue delete error: $e');
+      }
+    }
+    _entries.removeWhere((e) => e.id == entryId);
+  }
+
   /// Get queue statistics for today
   Future<Map<String, int>> getStats(String department) async {
     final queue = await getDepartmentQueue(department);
@@ -145,22 +186,138 @@ class QueueRepository {
     };
   }
 
+  /// Reset today's sequence counter back to zero (001)
+  void resetDailyCounters() {
+    final today = DateHelper.todayKey();
+    _counters.removeWhere((key, _) => key.endsWith('_$today'));
+  }
+
+  /// Get archived queue entries filtered by date, department, or search query
+  Future<List<QueueEntry>> getArchivedEntries({
+    String? dateKey,
+    String? department,
+    String? searchQuery,
+  }) async {
+    final today = DateHelper.todayKey();
+    List<QueueEntry> results = [];
+
+    if (isSupabase) {
+      try {
+        var query = SupabaseService.client.from('queue_entries').select();
+
+        if (dateKey != null && dateKey.isNotEmpty && dateKey != 'ALL') {
+          query = query.eq('date_key', dateKey);
+        } else {
+          // If no specific date selected or 'ALL', fetch all past dates
+          query = query.neq('date_key', today);
+        }
+
+        if (department != null && department.isNotEmpty && department != 'ALL') {
+          query = query.eq('department', department);
+        }
+
+        final data = await query.order('created_at', ascending: false);
+        results = (data as List).map((j) => QueueEntry.fromJson(j)).toList();
+      } catch (e) {
+        debugPrint('Supabase archive fetch error: $e');
+        results = _entries.where((e) {
+          final matchDate =
+              (dateKey != null && dateKey.isNotEmpty && dateKey != 'ALL')
+                  ? e.dateKey == dateKey
+                  : e.dateKey != today;
+          final matchDept =
+              (department == null || department.isEmpty || department == 'ALL')
+                  ? true
+                  : e.department == department;
+          return matchDate && matchDept;
+        }).toList();
+      }
+    } else {
+      results = _entries.where((e) {
+        final matchDate =
+            (dateKey != null && dateKey.isNotEmpty && dateKey != 'ALL')
+                ? e.dateKey == dateKey
+                : e.dateKey != today;
+        final matchDept =
+            (department == null || department.isEmpty || department == 'ALL')
+                ? true
+                : e.department == department;
+        return matchDate && matchDept;
+      }).toList();
+    }
+
+    if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+      final q = searchQuery.toLowerCase().trim();
+      results = results.where((e) {
+        return e.patientName.toLowerCase().contains(q) ||
+            e.queueNumber.toLowerCase().contains(q) ||
+            e.purpose.toLowerCase().contains(q) ||
+            (e.assignedDoctor != null &&
+                e.assignedDoctor!.toLowerCase().contains(q)) ||
+            (e.assignedRoom != null &&
+                e.assignedRoom!.toLowerCase().contains(q));
+      }).toList();
+    }
+
+    results.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return results;
+  }
+
+  /// Get all unique dates available in the archive
+  Future<List<String>> getArchiveDates() async {
+    final today = DateHelper.todayKey();
+    final Set<String> dates = {};
+
+    if (isSupabase) {
+      try {
+        final data = await SupabaseService.client
+            .from('queue_entries')
+            .select('date_key')
+            .order('date_key', ascending: false);
+        for (final row in data as List) {
+          final dk = row['date_key'] as String?;
+          if (dk != null && dk.isNotEmpty && dk != today) {
+            dates.add(dk);
+          }
+        }
+      } catch (e) {
+        debugPrint('Supabase archive dates error: $e');
+      }
+    }
+
+    for (final e in _entries) {
+      if (e.dateKey != today) {
+        dates.add(e.dateKey);
+      }
+    }
+
+    final sorted = dates.toList()..sort((a, b) => b.compareTo(a));
+    return sorted;
+  }
+
   // ── Storage ──
 
   Future<void> _loadFromStorage() async {
+    final today = DateHelper.todayKey();
+    _lastLoadedDateKey = today;
+
     if (isSupabase) {
       try {
-        final today = DateHelper.todayKey();
         final data = await SupabaseService.client
             .from('queue_entries')
             .select()
             .eq('date_key', today)
             .order('created_at');
-        _entries =
+        final todayEntries =
             (data as List).map((j) => QueueEntry.fromJson(j)).toList();
 
-        // Rebuild counters
-        for (final entry in _entries) {
+        // Keep past cached entries and replace today's entries
+        _entries.removeWhere((e) => e.dateKey == today);
+        _entries.addAll(todayEntries);
+
+        // Reset and rebuild counters ONLY for today
+        _counters.removeWhere((key, _) => !key.endsWith('_$today'));
+        for (final entry in todayEntries) {
           final key = '${entry.department}_$today';
           final num = int.tryParse(
                   entry.queueNumber.split('-').last) ??

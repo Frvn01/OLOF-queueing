@@ -47,6 +47,7 @@ class AppColors {
   static const Color success = Color(0xFF059669);          // Emerald
   static const Color warning = Color(0xFFD97706);          // Warm amber
   static const Color urgent = Color(0xFFDC2626);           // Coral red
+  static const Color error = urgent;                      // Semantic alias for danger/delete
   static const Color info = Color(0xFF4F46E5);             // Indigo
   static const Color nowServing = Color(0xFFF59E0B);       // Golden amber (high eye contrast)
   static const Color nowServingTextDark = Color(0xFF78350F);

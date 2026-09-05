@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../data/models/queue_entry.dart';
 import '../data/repositories/queue_repository.dart';
@@ -47,6 +48,8 @@ class QueueProvider extends ChangeNotifier {
     _isLoading = false;
     notifyListeners();
 
+    _startDailyTimer();
+
     // Listen for realtime changes
     _repo.listenToChanges(() async {
       await _refreshAll();
@@ -61,6 +64,7 @@ class QueueProvider extends ChangeNotifier {
     String? patientPhoto,
     required String department,
     required String purpose,
+    String? doctor,
     String? room,
   }) async {
     final queueNumber = _repo.getNextQueueNumber(department);
@@ -72,6 +76,7 @@ class QueueProvider extends ChangeNotifier {
       department: department,
       queueNumber: queueNumber,
       purpose: purpose,
+      assignedDoctor: doctor,
       assignedRoom: room,
       dateKey: DateHelper.todayKey(),
     );
@@ -83,8 +88,8 @@ class QueueProvider extends ChangeNotifier {
   }
 
   /// Call next patient
-  Future<QueueEntry?> callNext(String department, String room) async {
-    final entry = await _repo.callNext(department, room);
+  Future<QueueEntry?> callNext(String department) async {
+    final entry = await _repo.callNext(department);
     await _refreshAll();
     notifyListeners();
     return entry;
@@ -116,6 +121,59 @@ class QueueProvider extends ChangeNotifier {
     await _repo.resumeEntry(entryId);
     await _refreshAll();
     notifyListeners();
+  }
+
+  /// Remove patient from queue
+  Future<void> removeFromQueue(String entryId) async {
+    await _repo.removeEntry(entryId);
+    await _refreshAll();
+    notifyListeners();
+  }
+
+  /// Get archived queue entries from past dates
+  Future<List<QueueEntry>> getArchivedEntries({
+    String? dateKey,
+    String? department,
+    String? searchQuery,
+  }) async {
+    return _repo.getArchivedEntries(
+      dateKey: dateKey,
+      department: department,
+      searchQuery: searchQuery,
+    );
+  }
+
+  /// Get all unique dates in the archive
+  Future<List<String>> getArchiveDates() async {
+    return _repo.getArchiveDates();
+  }
+
+  /// Manually reset today's sequence counter back to zero (001)
+  Future<void> resetDailyQueue() async {
+    _repo.resetDailyCounters();
+    await _refreshAll();
+    notifyListeners();
+  }
+
+  Timer? _dailyCheckTimer;
+  String _activeDateKey = DateHelper.todayKey();
+
+  void _startDailyTimer() {
+    _dailyCheckTimer?.cancel();
+    _dailyCheckTimer = Timer.periodic(const Duration(minutes: 1), (_) async {
+      final nowKey = DateHelper.todayKey();
+      if (nowKey != _activeDateKey) {
+        _activeDateKey = nowKey;
+        await _refreshAll();
+        notifyListeners();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _dailyCheckTimer?.cancel();
+    super.dispose();
   }
 
   /// Refresh all queue data

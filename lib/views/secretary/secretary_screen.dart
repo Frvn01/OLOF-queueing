@@ -19,7 +19,6 @@ class SecretaryScreen extends StatefulWidget {
 class _SecretaryScreenState extends State<SecretaryScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  String _selectedRoom = 'Room 1';
 
   @override
   void initState() {
@@ -123,34 +122,15 @@ class _SecretaryScreenState extends State<SecretaryScreen>
               ],
             ),
           ),
-          // Room selector
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.surfaceMid : AppColors.lightSurfaceMid,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: borderColor),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedRoom,
-                dropdownColor: isDark ? AppColors.surfaceMid : AppColors.lightSurface,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: titleColor,
-                ),
-                items: ['Room 1', 'Room 2', 'Room 3']
-                    .map((r) => DropdownMenuItem(
-                          value: r,
-                          child: Text(r),
-                        ))
-                    .toList(),
-                onChanged: (v) => setState(() => _selectedRoom = v!),
-              ),
-            ),
+
+          // Archive Button
+          IconButton(
+            icon: const Icon(Icons.archive_outlined, size: 20),
+            tooltip: 'Queue Archive & History',
+            onPressed: () => context.push('/archive'),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
           ),
-          const SizedBox(width: 2),
           // Theme Switcher
           IconButton(
             icon: Icon(
@@ -190,9 +170,9 @@ class _SecretaryScreenState extends State<SecretaryScreen>
       title: 'Secretary Station Guide',
       steps: [
         TutorialItem(
-          title: '1. Select Consultation Room',
+          title: '1. Assigned Rooms & Doctors',
           description:
-              'Choose your assigned doctor\'s room from the dropdown at the top right (Room 1, 2, or 3).',
+              'Each patient is pre-assigned to their doctor and room at registration. Calling a patient automatically directs them to the correct room.',
           icon: Icons.meeting_room_rounded,
           color: AppColors.primary,
         ),
@@ -571,7 +551,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${entry.assignedRoom ?? "—"} • ${entry.purpose}',
+                  '${entry.assignedDoctor != null && entry.assignedDoctor!.isNotEmpty ? "${entry.assignedDoctor} • " : ""}${entry.assignedRoom ?? "Room Unassigned"} • ${entry.purpose}',
                   style: TextStyle(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
@@ -680,6 +660,43 @@ class _SecretaryScreenState extends State<SecretaryScreen>
                     fontWeight: FontWeight.w500,
                   ),
                 ),
+                if ((entry.assignedDoctor != null && entry.assignedDoctor!.isNotEmpty) ||
+                    (entry.assignedRoom != null && entry.assignedRoom!.isNotEmpty))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      children: [
+                        if (entry.assignedDoctor != null && entry.assignedDoctor!.isNotEmpty) ...[
+                          const Icon(Icons.medical_services_rounded, size: 12, color: AppColors.primary),
+                          const SizedBox(width: 3),
+                          Flexible(
+                            child: Text(
+                              entry.assignedDoctor!,
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        if (entry.assignedRoom != null && entry.assignedRoom!.isNotEmpty) ...[
+                          const Icon(Icons.meeting_room_rounded, size: 12, color: AppColors.cyanCalm),
+                          const SizedBox(width: 3),
+                          Text(
+                            entry.assignedRoom!,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.cyanCalm,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 if (entry.isOnHold)
                   Container(
                     margin: const EdgeInsets.only(top: 4),
@@ -728,6 +745,14 @@ class _SecretaryScreenState extends State<SecretaryScreen>
                 icon: const Icon(Icons.skip_next_rounded),
                 tooltip: 'Skip',
                 color: AppColors.warning,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              ),
+              IconButton(
+                onPressed: () => _confirmDeleteEntry(entry),
+                icon: const Icon(Icons.delete_outline_rounded),
+                tooltip: 'Remove from Queue',
+                color: AppColors.error,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               ),
@@ -822,7 +847,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
   Future<void> _callNext(String department) async {
     await context
         .read<QueueProvider>()
-        .callNext(department, _selectedRoom);
+        .callNext(department);
   }
 
   Future<void> _markComplete(String entryId) async {
@@ -839,5 +864,69 @@ class _SecretaryScreenState extends State<SecretaryScreen>
 
   Future<void> _resumeEntry(String entryId) async {
     await context.read<QueueProvider>().resumeEntry(entryId);
+  }
+
+  Future<void> _confirmDeleteEntry(QueueEntry entry) async {
+    final themeProv = context.read<ThemeProvider>();
+    final isDark = themeProv.isDarkMode;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: isDark ? AppColors.surfaceMid : AppColors.lightSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.urgent.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.delete_outline_rounded,
+                  color: AppColors.urgent, size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Text('Remove from Queue',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to remove ${entry.patientName} (${entry.queueNumber}) from the active queue?',
+          style: TextStyle(
+            color:
+                isDark ? AppColors.textSecondary : AppColors.lightTextSecondary,
+            fontSize: 14,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.urgent,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await context.read<QueueProvider>().removeFromQueue(entry.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                '${entry.patientName} (${entry.queueNumber}) removed from queue'),
+            backgroundColor: AppColors.urgent,
+          ),
+        );
+      }
+    }
   }
 }

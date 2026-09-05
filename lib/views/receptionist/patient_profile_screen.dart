@@ -189,6 +189,12 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
             tooltip: 'Toggle Theme',
             onPressed: () => context.read<ThemeProvider>().toggleTheme(),
           ),
+          const SizedBox(width: 2),
+          IconButton(
+            icon: const Icon(Icons.delete_outline_rounded, color: AppColors.urgent),
+            tooltip: 'Delete Patient Record',
+            onPressed: () => _confirmDeletePatient(context, patient),
+          ),
           const SizedBox(width: 4),
           ElevatedButton(
             onPressed: () => context
@@ -382,6 +388,11 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
             _buildInfoRow('Occupation', patient.occupation!, isDark, isCompact),
           if (patient.referredBy != null && patient.referredBy!.isNotEmpty)
             _buildInfoRow('Referred By', patient.referredBy!, isDark, isCompact),
+          _buildInfoRow('Visit Status', patient.isFirstTime ? 'First-Time Check-up' : 'Returning Patient (Past History)', isDark, isCompact),
+          if (patient.assignedDoctor != null && patient.assignedDoctor!.isNotEmpty)
+            _buildInfoRow('Assigned Doctor', patient.assignedDoctor!, isDark, isCompact),
+          if (patient.assignedRoom != null && patient.assignedRoom!.isNotEmpty)
+            _buildInfoRow('Assigned Room', patient.assignedRoom!, isDark, isCompact),
           if (patient.chiefComplaint != null && patient.chiefComplaint!.isNotEmpty) ...[
             Divider(
               height: 22,
@@ -689,6 +700,70 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Could not update photo: $e')),
         );
+      }
+    }
+  }
+
+  Future<void> _confirmDeletePatient(
+      BuildContext context, Patient patient) async {
+    final isDark = context.read<ThemeProvider>().isDarkMode;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: isDark ? AppColors.surfaceMid : AppColors.lightSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.urgent.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.delete_outline_rounded,
+                  color: AppColors.urgent, size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Text('Delete Patient Record',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to permanently delete the patient record for ${patient.displayName} (ID: ${patient.patientNo})?\n\nThis will also remove their clinic visit history.',
+          style: TextStyle(
+            color:
+                isDark ? AppColors.textSecondary : AppColors.lightTextSecondary,
+            fontSize: 14,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.urgent,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      await context.read<PatientProvider>().deletePatient(patient.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Patient record for ${patient.displayName} deleted'),
+            backgroundColor: AppColors.urgent,
+          ),
+        );
+        context.go('/receptionist');
       }
     }
   }

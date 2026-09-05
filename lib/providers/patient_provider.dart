@@ -82,6 +82,9 @@ class PatientProvider extends ChangeNotifier {
     String? chiefComplaint,
     String? historyOfPresentIllness,
     String? pastMedicalHistory,
+    bool isFirstTime = true,
+    String? assignedDoctor,
+    String? assignedRoom,
   }) async {
     final patient = Patient(
       id: IdGenerator.generateUuid(),
@@ -100,6 +103,9 @@ class PatientProvider extends ChangeNotifier {
       chiefComplaint: chiefComplaint,
       historyOfPresentIllness: historyOfPresentIllness,
       pastMedicalHistory: pastMedicalHistory,
+      isFirstTime: isFirstTime,
+      assignedDoctor: assignedDoctor,
+      assignedRoom: assignedRoom,
     );
 
     final saved = await _repo.addPatient(patient);
@@ -117,6 +123,17 @@ class PatientProvider extends ChangeNotifier {
     }
     notifyListeners();
     return saved;
+  }
+
+  /// Delete a patient by ID
+  Future<void> deletePatient(String patientId) async {
+    await _repo.deletePatient(patientId);
+    _patients = await _repo.getPatients();
+    if (_selectedPatient?.id == patientId) {
+      _selectedPatient = null;
+      _selectedPatientVisits = [];
+    }
+    notifyListeners();
   }
 
   /// Get patient by ID

@@ -153,6 +153,12 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
             tooltip: 'Manage Doctors & Rooms',
             onPressed: () => showClinicManagementDialog(context, isDark: isDark),
           ),
+          // Queue Archive Button
+          IconButton(
+            icon: const Icon(Icons.archive_outlined, color: AppColors.cyanCalm),
+            tooltip: 'Queue Archive & Patient History',
+            onPressed: () => context.push('/archive'),
+          ),
           // Tutorial Button
           IconButton(
             icon: const Icon(Icons.help_outline_rounded, color: AppColors.cyanCalm),
@@ -270,9 +276,22 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
         ),
         onTap: () => showClinicManagementDialog(context, isDark: isDark),
       ),
+      _QuickAction(
+        icon: Icons.archive_outlined,
+        label: 'Queue Archive',
+        sublabel: 'Past patients by date & purpose',
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0D9488), Color(0xFF0F766E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        onTap: () => context.push('/archive'),
+      ),
     ];
 
-    if (!isCompact) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    if (screenWidth >= 1100) {
       return Row(
         children: [
           Expanded(child: _buildActionCard(context, actions[0], isDark)),
@@ -280,9 +299,32 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
           Expanded(child: _buildActionCard(context, actions[1], isDark)),
           const SizedBox(width: 14),
           Expanded(child: _buildActionCard(context, actions[2], isDark)),
+          const SizedBox(width: 14),
+          Expanded(child: _buildActionCard(context, actions[3], isDark)),
+        ],
+      );
+    } else if (screenWidth >= 600) {
+      return Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _buildActionCard(context, actions[0], isDark)),
+              const SizedBox(width: 14),
+              Expanded(child: _buildActionCard(context, actions[1], isDark)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _buildActionCard(context, actions[2], isDark)),
+              const SizedBox(width: 14),
+              Expanded(child: _buildActionCard(context, actions[3], isDark)),
+            ],
+          ),
         ],
       );
     }
+
     return Column(
       children: [
         _buildActionCard(context, actions[0], isDark),
@@ -290,6 +332,8 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
         _buildActionCard(context, actions[1], isDark),
         const SizedBox(height: 12),
         _buildActionCard(context, actions[2], isDark),
+        const SizedBox(height: 12),
+        _buildActionCard(context, actions[3], isDark),
       ],
     );
   }

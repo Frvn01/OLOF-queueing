@@ -9,6 +9,7 @@ class QueueEntry {
   final String purpose; // e.g. 'Consultation', 'Follow-up'
   final String status; // waiting, serving, completed, skipped, on_hold
   final String? assignedRoom;
+  final String? assignedDoctor;
   final String dateKey; // 'YYYY-MM-DD' for daily reset
   final DateTime createdAt;
   final DateTime? calledAt;
@@ -24,6 +25,7 @@ class QueueEntry {
     required this.purpose,
     this.status = 'waiting',
     this.assignedRoom,
+    this.assignedDoctor,
     required this.dateKey,
     DateTime? createdAt,
     this.calledAt,
@@ -40,6 +42,7 @@ class QueueEntry {
         'purpose': purpose,
         'status': status,
         'assigned_room': assignedRoom,
+        'assigned_doctor': assignedDoctor,
         'date_key': dateKey,
         'created_at': createdAt.toIso8601String(),
         'called_at': calledAt?.toIso8601String(),
@@ -56,6 +59,7 @@ class QueueEntry {
         purpose: json['purpose'] as String,
         status: json['status'] as String? ?? 'waiting',
         assignedRoom: json['assigned_room'] as String?,
+        assignedDoctor: json['assigned_doctor'] as String?,
         dateKey: json['date_key'] as String,
         createdAt: json['created_at'] != null
             ? DateTime.parse(json['created_at'] as String)
@@ -71,6 +75,7 @@ class QueueEntry {
   QueueEntry copyWith({
     String? status,
     String? assignedRoom,
+    String? assignedDoctor,
     DateTime? calledAt,
     DateTime? completedAt,
   }) {
@@ -84,6 +89,7 @@ class QueueEntry {
       purpose: purpose,
       status: status ?? this.status,
       assignedRoom: assignedRoom ?? this.assignedRoom,
+      assignedDoctor: assignedDoctor ?? this.assignedDoctor,
       dateKey: dateKey,
       createdAt: createdAt,
       calledAt: calledAt ?? this.calledAt,

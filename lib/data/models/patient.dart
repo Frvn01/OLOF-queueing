@@ -16,6 +16,9 @@ class Patient {
   final String? chiefComplaint;
   final String? historyOfPresentIllness;
   final String? pastMedicalHistory;
+  final bool isFirstTime;
+  final String? assignedDoctor;
+  final String? assignedRoom;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -36,6 +39,9 @@ class Patient {
     this.chiefComplaint,
     this.historyOfPresentIllness,
     this.pastMedicalHistory,
+    this.isFirstTime = true,
+    this.assignedDoctor,
+    this.assignedRoom,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -71,6 +77,9 @@ class Patient {
         'chief_complaint': chiefComplaint,
         'history_of_present_illness': historyOfPresentIllness,
         'past_medical_history': pastMedicalHistory,
+        'is_first_time': isFirstTime,
+        'assigned_doctor': assignedDoctor,
+        'assigned_room': assignedRoom,
         'created_at': createdAt.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),
       };
@@ -93,6 +102,9 @@ class Patient {
         historyOfPresentIllness:
             json['history_of_present_illness'] as String?,
         pastMedicalHistory: json['past_medical_history'] as String?,
+        isFirstTime: json['is_first_time'] as bool? ?? true,
+        assignedDoctor: json['assigned_doctor'] as String?,
+        assignedRoom: json['assigned_room'] as String?,
         createdAt: json['created_at'] != null
             ? DateTime.parse(json['created_at'] as String)
             : null,
@@ -116,6 +128,9 @@ class Patient {
     String? chiefComplaint,
     String? historyOfPresentIllness,
     String? pastMedicalHistory,
+    bool? isFirstTime,
+    String? assignedDoctor,
+    String? assignedRoom,
   }) {
     return Patient(
       id: id,
@@ -135,6 +150,9 @@ class Patient {
       historyOfPresentIllness:
           historyOfPresentIllness ?? this.historyOfPresentIllness,
       pastMedicalHistory: pastMedicalHistory ?? this.pastMedicalHistory,
+      isFirstTime: isFirstTime ?? this.isFirstTime,
+      assignedDoctor: assignedDoctor ?? this.assignedDoctor,
+      assignedRoom: assignedRoom ?? this.assignedRoom,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
     );

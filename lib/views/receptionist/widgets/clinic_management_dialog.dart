@@ -38,7 +38,7 @@ class _ClinicManagementDialogState extends State<_ClinicManagementDialog>
 
   // Doctor Form
   final _doctorNameCtrl = TextEditingController();
-  final _doctorRoomCtrl = TextEditingController();
+  String? _selectedDoctorRoom;
   String _doctorDept = 'ENT'; // 'ENT', 'EYES', 'BOTH'
   bool _isAddingDoctor = false;
 
@@ -61,7 +61,6 @@ class _ClinicManagementDialogState extends State<_ClinicManagementDialog>
   void dispose() {
     _tabController.dispose();
     _doctorNameCtrl.dispose();
-    _doctorRoomCtrl.dispose();
     _roomNameCtrl.dispose();
     super.dispose();
   }
@@ -80,12 +79,14 @@ class _ClinicManagementDialogState extends State<_ClinicManagementDialog>
       await context.read<ClinicProvider>().addDoctor(
             name: name,
             department: _doctorDept,
-            room: _doctorRoomCtrl.text.trim().isNotEmpty
-                ? _doctorRoomCtrl.text.trim()
+            room: (_selectedDoctorRoom != null && _selectedDoctorRoom!.trim().isNotEmpty)
+                ? _selectedDoctorRoom!.trim()
                 : null,
           );
       _doctorNameCtrl.clear();
-      _doctorRoomCtrl.clear();
+      setState(() {
+        _selectedDoctorRoom = null;
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -365,17 +366,77 @@ class _ClinicManagementDialogState extends State<_ClinicManagementDialog>
 
                   const SizedBox(height: 10),
 
-                  // Default Room
-                  TextField(
-                    controller: _doctorRoomCtrl,
-                    style: TextStyle(color: titleColor, fontWeight: FontWeight.w600),
+                  // Default Room Dropdown (fetches all available rooms)
+                  DropdownButtonFormField<String?>(
+                    initialValue: _selectedDoctorRoom,
+                    dropdownColor: isDark ? AppColors.surfaceMid : AppColors.lightSurface,
+                    style: TextStyle(
+                      color: titleColor,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                     decoration: InputDecoration(
                       labelText: 'Default Room (Optional)',
-                      hintText: 'e.g. Room 1',
+                      hintText: 'Select assigned consultation room',
                       prefixIcon: const Icon(Icons.door_sliding_rounded, size: 18),
                       contentPadding:
                           const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
+                    items: [
+                      DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text(
+                          'None (No Default Room)',
+                          style: TextStyle(
+                            color: subtitleColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      ...clinic.rooms.map(
+                        (r) => DropdownMenuItem<String?>(
+                          value: r.name,
+                          child: Row(
+                            children: [
+                              Text(
+                                r.name,
+                                style: TextStyle(
+                                  color: titleColor,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: (r.department == 'ENT'
+                                          ? AppColors.entColor
+                                          : r.department == 'EYES'
+                                              ? AppColors.eyesColor
+                                              : AppColors.cyanCalm)
+                                      .withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  r.department,
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: r.department == 'ENT'
+                                        ? AppColors.entColor
+                                        : r.department == 'EYES'
+                                            ? AppColors.eyesColor
+                                            : AppColors.cyanCalm,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: (v) => setState(() => _selectedDoctorRoom = v),
                   ),
 
                   const SizedBox(height: 14),

@@ -62,6 +62,19 @@ class PatientRepository {
             .insert(patient.toJson());
       } catch (e) {
         debugPrint('Supabase insert error: $e');
+        if (e.toString().contains('assigned_doctor') ||
+            e.toString().contains('assigned_room') ||
+            e.toString().contains('is_first_time')) {
+          try {
+            final fallback = Map<String, dynamic>.from(patient.toJson())
+              ..remove('is_first_time')
+              ..remove('assigned_doctor')
+              ..remove('assigned_room');
+            await SupabaseService.client.from('patients').insert(fallback);
+          } catch (e2) {
+            debugPrint('Supabase fallback insert error: $e2');
+          }
+        }
       }
     }
     _patients.add(patient);
@@ -79,12 +92,45 @@ class PatientRepository {
             .eq('id', patient.id);
       } catch (e) {
         debugPrint('Supabase update error: $e');
+        if (e.toString().contains('assigned_doctor') ||
+            e.toString().contains('assigned_room') ||
+            e.toString().contains('is_first_time')) {
+          try {
+            final fallback = Map<String, dynamic>.from(patient.toJson())
+              ..remove('is_first_time')
+              ..remove('assigned_doctor')
+              ..remove('assigned_room');
+            await SupabaseService.client
+                .from('patients')
+                .update(fallback)
+                .eq('id', patient.id);
+          } catch (e2) {
+            debugPrint('Supabase fallback update error: $e2');
+          }
+        }
       }
     }
     final idx = _patients.indexWhere((p) => p.id == patient.id);
     if (idx >= 0) _patients[idx] = patient;
     await _saveToStorage();
     return patient;
+  }
+
+  /// Delete a patient record and their visit history
+  Future<void> deletePatient(String patientId) async {
+    if (isSupabase) {
+      try {
+        await SupabaseService.client
+            .from('patients')
+            .delete()
+            .eq('id', patientId);
+      } catch (e) {
+        debugPrint('Supabase delete patient error: $e');
+      }
+    }
+    _patients.removeWhere((p) => p.id == patientId);
+    _visits.removeWhere((v) => v.patientId == patientId);
+    await _saveToStorage();
   }
 
   /// Get visit history for a patient

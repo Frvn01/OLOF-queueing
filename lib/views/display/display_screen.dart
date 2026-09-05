@@ -11,6 +11,7 @@ import '../../shared/widgets/olof_logo.dart';
 import '../../data/models/queue_entry.dart';
 import '../../providers/queue_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/clinic_provider.dart';
 
 /// Client Display Screen for TV / Web Waiting Room Projection
 /// Specifically designed for eye and ENT clinic patients:
@@ -69,6 +70,22 @@ class _DisplayScreenState extends State<DisplayScreen>
     _clockTimer.cancel();
     _pulseController.dispose();
     super.dispose();
+  }
+
+  String? _getServingDoctor(QueueEntry serving, String department) {
+    if (serving.assignedDoctor != null && serving.assignedDoctor!.trim().isNotEmpty) {
+      return serving.assignedDoctor!;
+    }
+    // Check if room has an assigned doctor in ClinicProvider
+    if (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty) {
+      try {
+        final clinic = context.read<ClinicProvider>();
+        final doc = clinic.getDoctorForRoom(serving.assignedRoom!);
+        if (doc != null) return doc.name;
+      } catch (_) {}
+    }
+    // Return null for new/unassigned patients
+    return null;
   }
 
   void _checkAndPlayChime(QueueEntry? entServing, QueueEntry? eyesServing) {
@@ -790,17 +807,43 @@ class _DisplayScreenState extends State<DisplayScreen>
                   ),
                   const SizedBox(height: 6),
 
-                  // Doctor Name (replaces patient name for Data Privacy Act)
-                  Text(
-                    AppConstants.departmentDoctors[department] ?? 'Attending Physician',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: isHighContrast ? 24 : 21,
-                      fontWeight: FontWeight.w900,
-                      color: textPrimary,
-                      letterSpacing: 0.5,
-                    ),
+                  // Doctor Name or NEW PATIENT badge
+                  Builder(
+                    builder: (ctx) {
+                      final doctorName = _getServingDoctor(serving, department);
+                      final hasRoom = serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty;
+                      if (doctorName != null) {
+                        return Text(
+                          doctorName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: isHighContrast ? 24 : 21,
+                            fontWeight: FontWeight.w900,
+                            color: textPrimary,
+                            letterSpacing: 0.5,
+                          ),
+                        );
+                      } else {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppColors.warning.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+                          ),
+                          child: Text(
+                            hasRoom ? 'NEW PATIENT' : 'NEW PATIENT — UNASSIGNED',
+                            style: TextStyle(
+                              fontSize: isHighContrast ? 16 : 14,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.warning,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        );
+                      }
+                    },
                   ),
                   const SizedBox(height: 3),
                   // Purpose label
@@ -819,35 +862,48 @@ class _DisplayScreenState extends State<DisplayScreen>
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isDark ? AppColors.primaryDark : AppColors.primary,
+                      color: (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty)
+                          ? (isDark ? AppColors.primaryDark : AppColors.primary)
+                          : (isDark ? AppColors.surfaceLight : AppColors.lightSurfaceMid),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: AppColors.primaryLight,
+                        color: (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty)
+                            ? AppColors.primaryLight
+                            : (isDark ? AppColors.surfaceHover : AppColors.lightBorder),
                         width: 1.5,
                       ),
                       boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.3),
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
+                        if (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty)
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.3),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
                       ],
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
-                          Icons.meeting_room_rounded,
-                          color: Colors.white,
+                        Icon(
+                          (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty)
+                              ? Icons.meeting_room_rounded
+                              : Icons.info_outline_rounded,
+                          color: (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty)
+                              ? Colors.white
+                              : (isDark ? AppColors.textSecondary : AppColors.lightTextSecondary),
                           size: 20,
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'PROCEED TO ${serving.assignedRoom ?? "CONSULTATION ROOM"}',
+                          (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty)
+                              ? 'PROCEED TO ${serving.assignedRoom!.toUpperCase()}'
+                              : 'PLEASE WAIT FOR ROOM ASSIGNMENT',
                           style: TextStyle(
                             fontSize: isHighContrast ? 17 : 15.5,
                             fontWeight: FontWeight.w900,
-                            color: Colors.white,
+                            color: (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty)
+                                ? Colors.white
+                                : (isDark ? AppColors.textSecondary : AppColors.lightTextSecondary),
                             letterSpacing: 0.8,
                           ),
                         ),
@@ -925,8 +981,12 @@ class _DisplayScreenState extends State<DisplayScreen>
                     separatorBuilder: (context, index) => const SizedBox(width: 10),
                     itemBuilder: (context, index) {
                       final item = waitingList[index];
+                      final hasDoctor = item.assignedDoctor != null && item.assignedDoctor!.trim().isNotEmpty;
+                      final hasRoom = item.assignedRoom != null && item.assignedRoom!.trim().isNotEmpty;
+                      final isNew = !hasDoctor && !hasRoom;
+
                       return Container(
-                        width: 135,
+                        width: 145,
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: itemBg,
@@ -934,7 +994,9 @@ class _DisplayScreenState extends State<DisplayScreen>
                           border: Border.all(
                             color: item.isOnHold
                                 ? AppColors.onHold
-                                : (isDark ? AppColors.surfaceHover : AppColors.lightBorder),
+                                : isNew
+                                    ? AppColors.warning.withValues(alpha: 0.5)
+                                    : (isDark ? AppColors.surfaceHover : AppColors.lightBorder),
                             width: 1.5,
                           ),
                         ),
@@ -952,17 +1014,47 @@ class _DisplayScreenState extends State<DisplayScreen>
                               ),
                             ),
                             const SizedBox(height: 2),
-                            // Purpose shown instead of patient full name for Data Privacy Act
-                            Text(
-                              item.purpose,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                color: textSecondary,
-                                fontWeight: FontWeight.w700,
+                            if (isNew)
+                              Container(
+                                margin: const EdgeInsets.only(top: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.warning.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'NEW',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.warning,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              )
+                            else if (hasRoom && !hasDoctor)
+                              Text(
+                                item.assignedRoom!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.cyanCalm,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              )
+                            else
+                              // Purpose shown instead of patient full name for Data Privacy Act
+                              Text(
+                                item.purpose,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: textSecondary,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                            ),
                             if (item.isOnHold)
                               Container(
                                 margin: const EdgeInsets.only(top: 4),

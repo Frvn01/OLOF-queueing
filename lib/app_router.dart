@@ -7,10 +7,12 @@ import 'views/receptionist/checkin_screen.dart';
 import 'views/receptionist/patient_profile_screen.dart';
 import 'views/secretary/secretary_screen.dart';
 import 'views/display/display_screen.dart';
+import 'views/archive/queue_archive_screen.dart';
 
 /// App router configuration
 /// - Web: Strictly Client TV Display Screen
-/// - Mobile / Tablet: Strictly Receptionist & Secretary Staff Kiosks
+/// - Desktop: TV Display + Locked Staff Modules (future updates)
+/// - Mobile / Tablet: Exclusively Receptionist & Secretary Staff Kiosks (no TV Display)
 final GoRouter appRouter = GoRouter(
   initialLocation: kIsWeb ? '/display' : '/',
   routes: [
@@ -58,6 +60,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/secretary',
       builder: (context, state) => const SecretaryScreen(),
+    ),
+    GoRoute(
+      path: '/archive',
+      builder: (context, state) => const QueueArchiveScreen(),
     ),
   ],
 );

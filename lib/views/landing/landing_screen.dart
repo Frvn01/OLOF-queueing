@@ -459,9 +459,9 @@ class _LandingScreenState extends State<LandingScreen>
     );
   }
 
-  /// Mobile & Tablet Station Layout:
+  /// Mobile & Tablet Station Layout (Exclusive):
   /// - Receptionist and Secretary unlocked as staff kiosks
-  /// - TV Display available as preview
+  /// - No TV Display (mobile is exclusively for staff operations)
   Widget _buildMobileStations(
     BuildContext context,
     bool isDark,
@@ -549,20 +549,6 @@ class _LandingScreenState extends State<LandingScreen>
             ],
           ),
 
-        const SizedBox(height: 16),
-
-        // Optional TV Display Link on mobile
-        OutlinedButton.icon(
-          onPressed: () => context.go('/display'),
-          icon: const Icon(Icons.tv_rounded, size: 18),
-          label: const Text('View Waiting Area TV Display'),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
       ],
     );
   }

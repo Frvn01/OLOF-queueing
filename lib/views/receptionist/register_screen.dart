@@ -15,6 +15,7 @@ import '../../data/models/doctor.dart';
 import '../../data/models/clinic_room.dart';
 import '../../shared/widgets/photo_source_dialog.dart';
 import '../../shared/widgets/searchable_picker_dialog.dart';
+import '../../providers/queue_provider.dart';
 import 'widgets/clinic_management_dialog.dart';
 
 /// New patient registration form — Responsive multi-step wizard
@@ -48,6 +49,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _civilStatus = 'Single';
   bool _isSubmitting = false;
   Patient? _registeredPatient;
+  String? _registeredQueueNumber;
 
   // Photo picker state
   Uint8List? _photoBytes;
@@ -55,6 +57,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final ImagePicker _picker = ImagePicker();
 
   // Doctor & Room selection state
+  bool _isFirstTime = true;
   Doctor? _selectedDoctor;
   ClinicRoom? _selectedRoom;
 
@@ -871,6 +874,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
           maxLines: maxLines,
         ),
+        SizedBox(height: gap + 6),
+
+        // ── First Time Check-up Question ───────────────────────
+        _buildVisitTypeSelector(isDark, isLandscape),
         SizedBox(height: gap + 4),
 
         // ── Doctor & Room Assignment (Optional) ───────────────
@@ -878,7 +885,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Assign Doctor & Room (Optional)',
+              _isFirstTime
+                  ? 'Assign Doctor & Room (Optional)'
+                  : 'Assign Doctor & Room (Recommended)',
               style: TextStyle(
                 fontSize: 14.5,
                 fontWeight: FontWeight.w800,
@@ -911,6 +920,194 @@ class _RegisterScreenState extends State<RegisterScreen> {
           SizedBox(height: gap),
           _buildRoomField(context, isDark),
         ],
+      ],
+    );
+  }
+
+  Widget _buildVisitTypeSelector(bool isDark, bool isLandscape) {
+    final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
+    final cardBg = isDark ? AppColors.surfaceLight.withValues(alpha: 0.35) : AppColors.lightBg;
+    final borderColor = isDark ? AppColors.surfaceLight : AppColors.lightBorder;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.contact_support_rounded,
+              size: 18,
+              color: AppColors.primary,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Is this the patient\'s first time check-up?',
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w800,
+                  color: titleColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: () => setState(() => _isFirstTime = true),
+                borderRadius: BorderRadius.circular(14),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _isFirstTime
+                        ? AppColors.primary.withValues(alpha: 0.15)
+                        : cardBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: _isFirstTime ? AppColors.primary : borderColor,
+                      width: _isFirstTime ? 2.0 : 1.0,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _isFirstTime
+                            ? Icons.radio_button_checked_rounded
+                            : Icons.radio_button_off_rounded,
+                        color: _isFirstTime ? AppColors.primary : subtitleColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Yes — First-Time',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                                color: _isFirstTime ? AppColors.primary : titleColor,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'No doctor for now (optional)',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: subtitleColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: InkWell(
+                onTap: () => setState(() => _isFirstTime = false),
+                borderRadius: BorderRadius.circular(14),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: !_isFirstTime
+                        ? AppColors.cyanCalm.withValues(alpha: 0.15)
+                        : cardBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: !_isFirstTime ? AppColors.cyanCalm : borderColor,
+                      width: !_isFirstTime ? 2.0 : 1.0,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        !_isFirstTime
+                            ? Icons.radio_button_checked_rounded
+                            : Icons.radio_button_off_rounded,
+                        color: !_isFirstTime ? AppColors.cyanCalm : subtitleColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'No — Past History',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                                color: !_isFirstTime ? AppColors.cyanCalm : titleColor,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Assign doctor & room',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: subtitleColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: (_isFirstTime ? AppColors.primary : AppColors.cyanCalm)
+                .withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: (_isFirstTime ? AppColors.primary : AppColors.cyanCalm)
+                  .withValues(alpha: 0.3),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                _isFirstTime ? Icons.info_outline_rounded : Icons.history_edu_rounded,
+                size: 16,
+                color: _isFirstTime ? AppColors.primary : AppColors.cyanCalm,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _isFirstTime
+                      ? 'First-time check-up: Doctor assignment is optional (no doctor needed for now). You may leave Doctor unassigned or assign one if preferred.'
+                      : 'Past History Patient: Please select the attending doctor and consultation room for this visit.',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: _isFirstTime
+                        ? (isDark ? AppColors.primaryLight : AppColors.primaryDark)
+                        : (isDark ? AppColors.cyanCalm : const Color(0xFF0E7490)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -993,7 +1190,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          hasDoctor ? _selectedDoctor!.name : 'Assign Doctor',
+                          hasDoctor
+                              ? _selectedDoctor!.name
+                              : (_isFirstTime
+                                  ? 'No Doctor For Now (Optional)'
+                                  : 'Assign Attending Doctor'),
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
@@ -1003,7 +1204,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         Text(
                           hasDoctor
                               ? '${_selectedDoctor!.department} Specialist'
-                              : 'Filter with search & department',
+                              : (_isFirstTime
+                                  ? 'Tap to optionally choose doctor, or leave unassigned'
+                                  : 'Filter with search & department'),
                           style: TextStyle(
                             fontSize: 11.5,
                             color: subtitleColor,
@@ -1305,47 +1508,130 @@ class _RegisterScreenState extends State<RegisterScreen> {
             color: subtitleColor,
           ),
         ),
-        const SizedBox(height: 14),
-        Text(
-          'Patient can save this QR or their ID number for instant check-in.',
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w600,
-            color: subtitleColor,
+        if (_registeredQueueNumber != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.nowServing.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.nowServing, width: 1.5),
+            ),
+            child: Column(
+              children: [
+                const Text(
+                  'QUEUE TICKET ISSUED',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.nowServingTextDark,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _registeredQueueNumber!,
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.nowServingTextDark,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                Text(
+                  'Doctor: ${_selectedDoctor?.name ?? patient.assignedDoctor} • Room: ${_selectedRoom?.name ?? patient.assignedRoom}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: subtitleColor,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle_rounded, size: 14, color: AppColors.success),
+                    SizedBox(width: 4),
+                    Text(
+                      'Automatically Added to Live Queue',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.success,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          textAlign: isLandscape ? TextAlign.left : TextAlign.center,
-        ),
+        ] else ...[
+          const SizedBox(height: 14),
+          Text(
+            'Patient can save this QR or their ID number for instant check-in.',
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: subtitleColor,
+            ),
+            textAlign: isLandscape ? TextAlign.left : TextAlign.center,
+          ),
+        ],
         const SizedBox(height: 16),
         Row(
           mainAxisSize: isLandscape ? MainAxisSize.max : MainAxisSize.min,
           children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  final doctorParam = Uri.encodeComponent(_selectedDoctor?.name ?? '');
-                  final roomParam = Uri.encodeComponent(_selectedRoom?.name ?? '');
-                  final deptParam = Uri.encodeComponent(_selectedDoctor?.department ?? '');
-                  context.go(
-                      '/receptionist/checkin?patientId=${patient.id}&doctor=$doctorParam&room=$roomParam&dept=$deptParam');
-                },
-                icon: const Icon(Icons.login_rounded, size: 18),
-                label: const Text('Check In'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(0, 46),
+            if (_registeredQueueNumber != null) ...[
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => context.go('/secretary'),
+                  icon: const Icon(Icons.people_alt_rounded, size: 18),
+                  label: const Text('Secretary Station'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(0, 46),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => context.go('/receptionist'),
-                icon: const Icon(Icons.dashboard_rounded, size: 18),
-                label: const Text('Dashboard'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 46),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => context.go('/receptionist'),
+                  icon: const Icon(Icons.dashboard_rounded, size: 18),
+                  label: const Text('Dashboard'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 46),
+                  ),
                 ),
               ),
-            ),
+            ] else ...[
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    final doctorParam = Uri.encodeComponent(_selectedDoctor?.name ?? patient.assignedDoctor ?? '');
+                    final roomParam = Uri.encodeComponent(_selectedRoom?.name ?? patient.assignedRoom ?? '');
+                    final deptParam = Uri.encodeComponent(_selectedDoctor?.department ?? '');
+                    context.go(
+                        '/receptionist/checkin?patientId=${patient.id}&doctor=$doctorParam&room=$roomParam&dept=$deptParam');
+                  },
+                  icon: const Icon(Icons.login_rounded, size: 18),
+                  label: const Text('Check In'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(0, 46),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => context.go('/receptionist'),
+                  icon: const Icon(Icons.dashboard_rounded, size: 18),
+                  label: const Text('Dashboard'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 46),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ],
@@ -1435,6 +1721,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
             pastMedicalHistory: _pastMedicalController.text.trim().isNotEmpty
                 ? _pastMedicalController.text.trim()
                 : null,
+            isFirstTime: _isFirstTime,
+            assignedDoctor: _selectedDoctor?.name,
+            assignedRoom: _selectedRoom?.name,
           );
 
       // Upload photo if one was selected
@@ -1446,8 +1735,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
             );
       }
 
+      // If doctor and assigned room already chosen: automatically add to queue!
+      String? autoQueueNumber;
+      if (_selectedDoctor != null && _selectedRoom != null && mounted) {
+        final dept = _selectedDoctor!.department == 'BOTH'
+            ? 'ENT'
+            : _selectedDoctor!.department;
+        try {
+          final entry = await context.read<QueueProvider>().addToQueue(
+                patientId: patient.id,
+                patientName: patient.displayName,
+                patientPhoto: patient.photoUrl,
+                department: dept,
+                purpose: 'Consultation',
+                doctor: _selectedDoctor!.name,
+                room: _selectedRoom!.name,
+              );
+          autoQueueNumber = entry.queueNumber;
+        } catch (queueErr) {
+          debugPrint('Auto queue addition error: $queueErr');
+        }
+      }
+
       setState(() {
         _registeredPatient = patient;
+        _registeredQueueNumber = autoQueueNumber;
         _isSubmitting = false;
       });
     } catch (e) {
