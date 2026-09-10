@@ -102,7 +102,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Secretary Station',
+                  'Ophtha Department',
                   style: TextStyle(
                     fontSize: isCompact ? 16 : 18,
                     fontWeight: FontWeight.w800,
@@ -111,7 +111,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  'Doctor Queue & Room Calling',
+                  'Ophthalmology Dept. Queue Management',
                   style: TextStyle(
                     fontSize: isCompact ? 11 : 12.5,
                     fontWeight: FontWeight.w600,
@@ -146,7 +146,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
           // Tutorial Button
           IconButton(
             icon: const Icon(Icons.help_outline_rounded, color: AppColors.cyanCalm, size: 20),
-            tooltip: 'Secretary Guide',
+            tooltip: 'Ophtha Dept Guide',
             onPressed: () => _showSecretaryTutorial(context),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
@@ -167,7 +167,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
   void _showSecretaryTutorial(BuildContext context) {
     TutorialDialog.show(
       context,
-      title: 'Secretary Station Guide',
+      title: 'Ophtha Department Guide',
       steps: [
         TutorialItem(
           title: '1. Assigned Rooms & Doctors',

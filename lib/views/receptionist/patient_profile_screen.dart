@@ -182,6 +182,11 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
             ),
           ),
           IconButton(
+            icon: const Icon(Icons.edit_rounded, color: AppColors.primary),
+            tooltip: 'Edit Patient Info',
+            onPressed: () => _showEditPatientDialog(context, patient),
+          ),
+          IconButton(
             icon: Icon(
               isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
               color: isDark ? AppColors.warning : AppColors.brandBlue,
@@ -549,16 +554,73 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Visit History',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: titleColor,
-                ),
+              // Header row with refresh button
+              Row(
+                children: [
+                  Text(
+                    'Visit History',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: titleColor,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (provider.visitsLoading)
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primary,
+                      ),
+                    )
+                  else
+                    Tooltip(
+                      message: 'Refresh visit history',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () => context
+                            .read<PatientProvider>()
+                            .selectPatient(patient.id),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.refresh_rounded,
+                            size: 18,
+                            color: subtitleColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 12),
-              if (provider.selectedPatientVisits.isEmpty)
+              if (provider.visitsLoading && provider.selectedPatientVisits.isEmpty)
+                // Full loading state — no cached visits yet
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Column(
+                      children: [
+                        CircularProgressIndicator(
+                          color: AppColors.primary,
+                          strokeWidth: 2.5,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Loading visit history…',
+                          style: TextStyle(
+                            color: subtitleColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (provider.selectedPatientVisits.isEmpty)
                 Center(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -704,6 +766,443 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     }
   }
 
+  /// Show edit dialog for updating patient information
+  Future<void> _showEditPatientDialog(
+      BuildContext context, Patient patient) async {
+    final isDark = context.read<ThemeProvider>().isDarkMode;
+
+    // Controllers pre-filled with current data
+    final firstNameCtrl = TextEditingController(text: patient.firstName);
+    final lastNameCtrl = TextEditingController(text: patient.lastName);
+    final middleNameCtrl = TextEditingController(text: patient.middleName ?? '');
+    final addressCtrl = TextEditingController(text: patient.address);
+    final contactCtrl = TextEditingController(text: patient.contactNumber);
+    final occupationCtrl = TextEditingController(text: patient.occupation ?? '');
+    final referredByCtrl = TextEditingController(text: patient.referredBy ?? '');
+    final chiefComplaintCtrl =
+        TextEditingController(text: patient.chiefComplaint ?? '');
+    final historyCtrl =
+        TextEditingController(text: patient.historyOfPresentIllness ?? '');
+
+    // Parse existing pastMedicalHistory string into checkbox booleans.
+    // The string is stored as comma-separated keywords, e.g. "Hypertension, DM, Allergies".
+    final _existingPmh = (patient.pastMedicalHistory ?? '').toLowerCase();
+    bool _editPmhHypertension = _existingPmh.contains('hypertension');
+    bool _editPmhDM           = _existingPmh.contains('dm');
+    bool _editPmhAllergies    = _existingPmh.contains('allergies');
+    bool _editPmhOperations   = _existingPmh.contains('operations');
+    bool _editPmhMedications  = _existingPmh.contains('medications');
+    bool _editPmhGlaucoma     = _existingPmh.contains('glaucoma');
+    // Everything that is NOT one of the named keywords goes into "Other".
+    final _knownKeywords = ['hypertension', 'dm', 'allergies', 'operations', 'medications', 'glaucoma'];
+    final _otherParts = (patient.pastMedicalHistory ?? '')
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty && !_knownKeywords.contains(e.toLowerCase()))
+        .join(', ');
+    final pmhOtherCtrl = TextEditingController(text: _otherParts);
+
+    final cardBg =
+        isDark ? AppColors.surfaceMid : AppColors.lightSurface;
+    final titleColor =
+        isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+
+    Widget field(String label, TextEditingController ctrl,
+        {int maxLines = 1, TextInputType? keyboard}) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: TextFormField(
+          controller: ctrl,
+          maxLines: maxLines,
+          keyboardType: keyboard,
+          style: TextStyle(color: titleColor, fontWeight: FontWeight.w700),
+          decoration: InputDecoration(
+            labelText: label,
+            isDense: true,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          ),
+        ),
+      );
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => Dialog(
+        backgroundColor: cardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        insetPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640, maxHeight: 600),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.edit_rounded,
+                          color: AppColors.primary, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Edit Patient: ${patient.displayName}',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: titleColor,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () =>
+                          Navigator.of(dialogCtx).pop(false),
+                      icon: const Icon(Icons.close_rounded),
+                      iconSize: 20,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 12),
+
+                // Scrollable fields
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(child: field('First Name', firstNameCtrl)),
+                            const SizedBox(width: 12),
+                            Expanded(child: field('Last Name', lastNameCtrl)),
+                          ],
+                        ),
+                        field('Middle Name (optional)', middleNameCtrl),
+                        field('Address', addressCtrl),
+                        Row(
+                          children: [
+                            Expanded(
+                                child: field('Contact Number', contactCtrl,
+                                    keyboard: TextInputType.phone)),
+                            const SizedBox(width: 12),
+                            Expanded(
+                                child: field('Occupation', occupationCtrl)),
+                          ],
+                        ),
+                        field('Referred By', referredByCtrl),
+                        field('Chief Complaint', chiefComplaintCtrl,
+                            maxLines: 2),
+                        field('History of Present Illness', historyCtrl,
+                            maxLines: 2),
+                        const SizedBox(height: 2),
+
+                        // ── Past Medical History — checkbox section ──────────
+                        StatefulBuilder(
+                          builder: (_, setLocal) {
+                            final pmhCardBg = isDark
+                                ? AppColors.surfaceLight.withValues(alpha: 0.25)
+                                : AppColors.lightBg;
+                            final pmhBorder = isDark
+                                ? AppColors.surfaceHover
+                                : AppColors.lightBorder;
+
+                            Widget checkItem(
+                              String label,
+                              bool value,
+                              ValueChanged<bool> onChanged, {
+                              Color? accent,
+                            }) {
+                              return InkWell(
+                                borderRadius: BorderRadius.circular(8),
+                                onTap: () => onChanged(!value),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: Checkbox(
+                                          value: value,
+                                          onChanged: (v) => onChanged(v!),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          activeColor: accent ?? AppColors.primary,
+                                          materialTapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        label,
+                                        style: TextStyle(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: value
+                                              ? (accent ?? AppColors.primary)
+                                              : titleColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+
+                            return Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: pmhCardBg,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: pmhBorder),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.medical_services_rounded,
+                                        size: 16,
+                                        color: AppColors.primary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Past Medical History',
+                                        style: TextStyle(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: titleColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            checkItem(
+                                              'Hypertension',
+                                              _editPmhHypertension,
+                                              (v) => setLocal(
+                                                  () => _editPmhHypertension = v),
+                                              accent: AppColors.urgent,
+                                            ),
+                                            const SizedBox(height: 2),
+                                            checkItem(
+                                              'DM (Diabetes Mellitus)',
+                                              _editPmhDM,
+                                              (v) => setLocal(() => _editPmhDM = v),
+                                              accent: AppColors.warning,
+                                            ),
+                                            const SizedBox(height: 2),
+                                            checkItem(
+                                              'Allergies',
+                                              _editPmhAllergies,
+                                              (v) => setLocal(
+                                                  () => _editPmhAllergies = v),
+                                              accent: AppColors.onHold,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            checkItem(
+                                              'Operations',
+                                              _editPmhOperations,
+                                              (v) => setLocal(
+                                                  () => _editPmhOperations = v),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            checkItem(
+                                              'Medications',
+                                              _editPmhMedications,
+                                              (v) => setLocal(
+                                                  () => _editPmhMedications = v),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            checkItem(
+                                              'Glaucoma',
+                                              _editPmhGlaucoma,
+                                              (v) => setLocal(
+                                                  () => _editPmhGlaucoma = v),
+                                              accent: AppColors.cyanCalm,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  TextFormField(
+                                    controller: pmhOtherCtrl,
+                                    style: TextStyle(
+                                        color: titleColor,
+                                        fontWeight: FontWeight.w700),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Other relevant history',
+                                      hintText:
+                                          'Additional notes, surgeries, conditions...',
+                                      prefixIcon:
+                                          Icon(Icons.notes_rounded, size: 18),
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 12),
+                                    ),
+                                    maxLines: 2,
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () =>
+                            Navigator.of(dialogCtx).pop(false),
+                        style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 46)),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton.icon(
+                        onPressed: () =>
+                            Navigator.of(dialogCtx).pop(true),
+                        icon: const Icon(Icons.save_rounded, size: 18),
+                        label: const Text('Save Changes'),
+                        style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(0, 46)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // Wait one frame so the dialog fully disposes before triggering provider
+    // notifications — prevents the '_dependents.isEmpty' assertion error.
+    await Future.delayed(Duration.zero);
+
+    if (confirmed == true && context.mounted) {
+      final updated = patient.copyWith(
+        firstName: firstNameCtrl.text.trim().isNotEmpty
+            ? firstNameCtrl.text.trim()
+            : patient.firstName,
+        lastName: lastNameCtrl.text.trim().isNotEmpty
+            ? lastNameCtrl.text.trim()
+            : patient.lastName,
+        middleName: middleNameCtrl.text.trim().isNotEmpty
+            ? middleNameCtrl.text.trim()
+            : null,
+        address: addressCtrl.text.trim().isNotEmpty
+            ? addressCtrl.text.trim()
+            : patient.address,
+        contactNumber: contactCtrl.text.trim().isNotEmpty
+            ? contactCtrl.text.trim()
+            : patient.contactNumber,
+        occupation: occupationCtrl.text.trim().isNotEmpty
+            ? occupationCtrl.text.trim()
+            : null,
+        referredBy: referredByCtrl.text.trim().isNotEmpty
+            ? referredByCtrl.text.trim()
+            : null,
+        chiefComplaint: chiefComplaintCtrl.text.trim().isNotEmpty
+            ? chiefComplaintCtrl.text.trim()
+            : null,
+        historyOfPresentIllness: historyCtrl.text.trim().isNotEmpty
+            ? historyCtrl.text.trim()
+            : null,
+        pastMedicalHistory: () {
+          final parts = <String>[];
+          if (_editPmhHypertension) parts.add('Hypertension');
+          if (_editPmhDM) parts.add('DM');
+          if (_editPmhAllergies) parts.add('Allergies');
+          if (_editPmhOperations) parts.add('Operations');
+          if (_editPmhMedications) parts.add('Medications');
+          if (_editPmhGlaucoma) parts.add('Glaucoma');
+          if (pmhOtherCtrl.text.trim().isNotEmpty) {
+            parts.add(pmhOtherCtrl.text.trim());
+          }
+          return parts.isEmpty ? null : parts.join(', ');
+        }(),
+      );
+
+      await context.read<PatientProvider>().updatePatient(updated);
+
+      // Dispose controllers
+      firstNameCtrl.dispose();
+      lastNameCtrl.dispose();
+      middleNameCtrl.dispose();
+      addressCtrl.dispose();
+      contactCtrl.dispose();
+      occupationCtrl.dispose();
+      referredByCtrl.dispose();
+      chiefComplaintCtrl.dispose();
+      historyCtrl.dispose();
+      pmhOtherCtrl.dispose();
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Patient record updated successfully'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } else {
+      // Always dispose if cancelled
+      firstNameCtrl.dispose();
+      lastNameCtrl.dispose();
+      middleNameCtrl.dispose();
+      addressCtrl.dispose();
+      contactCtrl.dispose();
+      occupationCtrl.dispose();
+      referredByCtrl.dispose();
+      chiefComplaintCtrl.dispose();
+      historyCtrl.dispose();
+      pmhOtherCtrl.dispose();
+    }
+  }
+
   Future<void> _confirmDeletePatient(
       BuildContext context, Patient patient) async {
     final isDark = context.read<ThemeProvider>().isDarkMode;
@@ -753,6 +1252,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
         ],
       ),
     );
+
+    // Wait one frame so the dialog fully disposes before triggering provider
+    // notifications — prevents the '_dependents.isEmpty' assertion error.
+    await Future.delayed(Duration.zero);
 
     if (confirmed == true && context.mounted) {
       await context.read<PatientProvider>().deletePatient(patient.id);

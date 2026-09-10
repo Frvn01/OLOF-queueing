@@ -361,7 +361,7 @@ class _LandingScreenState extends State<LandingScreen>
         ),
         const SizedBox(height: 12),
 
-        // Receptionist & Secretary (LOCKED on Desktop)
+        // Receptionist, Ophtha Dept & Nurse (LOCKED on Desktop)
         if (isWide)
           Row(
             children: [
@@ -385,10 +385,10 @@ class _LandingScreenState extends State<LandingScreen>
                 child: _buildRoleCard(
                   context,
                   isDark: isDark,
-                  icon: Icons.assignment_rounded,
-                  title: 'Secretary',
+                  icon: Icons.visibility_rounded,
+                  title: 'Ophtha Dept',
                   subtitle:
-                      'Manage doctor queues, call patients & assign rooms',
+                      'Ophthalmology queue, call patients & assign rooms',
                   gradient: const LinearGradient(
                     colors: [
                       AppColors.cyanCalm,
@@ -399,7 +399,27 @@ class _LandingScreenState extends State<LandingScreen>
                   isLocked: true,
                   badgeText: 'LOCKED • FUTURE UPDATES',
                   onLockedTap: () =>
-                      _showLockedStationDialog(context, 'Secretary', isDark),
+                      _showLockedStationDialog(context, 'Ophtha Dept', isDark),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildRoleCard(
+                  context,
+                  isDark: isDark,
+                  icon: Icons.medical_information_rounded,
+                  title: 'Nurse',
+                  subtitle: 'Patient triage, vitals & clinical assistance',
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFEC4899), Color(0xFFBE185D)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  route: '/nurse',
+                  isLocked: true,
+                  badgeText: 'COMING SOON',
+                  onLockedTap: () =>
+                      _showLockedStationDialog(context, 'Nurse', isDark),
                 ),
               ),
             ],
@@ -424,10 +444,10 @@ class _LandingScreenState extends State<LandingScreen>
               _buildRoleCard(
                 context,
                 isDark: isDark,
-                icon: Icons.assignment_rounded,
-                title: 'Secretary',
+                icon: Icons.visibility_rounded,
+                title: 'Ophtha Dept',
                 subtitle:
-                    'Manage doctor queues, call patients & assign rooms',
+                    'Ophthalmology queue, call patients & assign rooms',
                 gradient: const LinearGradient(
                   colors: [
                     AppColors.cyanCalm,
@@ -438,7 +458,25 @@ class _LandingScreenState extends State<LandingScreen>
                 isLocked: true,
                 badgeText: 'LOCKED • FUTURE UPDATES',
                 onLockedTap: () =>
-                    _showLockedStationDialog(context, 'Secretary', isDark),
+                    _showLockedStationDialog(context, 'Ophtha Dept', isDark),
+              ),
+              const SizedBox(height: 12),
+              _buildRoleCard(
+                context,
+                isDark: isDark,
+                icon: Icons.medical_information_rounded,
+                title: 'Nurse',
+                subtitle: 'Patient triage, vitals & clinical assistance',
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFEC4899), Color(0xFFBE185D)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                route: '/nurse',
+                isLocked: true,
+                badgeText: 'COMING SOON',
+                onLockedTap: () =>
+                    _showLockedStationDialog(context, 'Nurse', isDark),
               ),
             ],
           ),
@@ -484,7 +522,7 @@ class _LandingScreenState extends State<LandingScreen>
         ),
         const SizedBox(height: 16),
 
-        if (isWide)
+        if (isWide) ...[
           Row(
             children: [
               Expanded(
@@ -503,22 +541,36 @@ class _LandingScreenState extends State<LandingScreen>
                 child: _buildRoleCard(
                   context,
                   isDark: isDark,
-                  icon: Icons.assignment_rounded,
-                  title: 'Secretary',
-                  subtitle:
-                      'Manage doctor queues, call patients & assign rooms',
+                  icon: Icons.visibility_rounded,
+                  title: 'Ophtha Dept',
+                  subtitle: 'Ophthalmology queue, call patients & assign rooms',
                   gradient: const LinearGradient(
-                    colors: [
-                      AppColors.cyanCalm,
-                      Color(0xFF0F766E),
-                    ],
+                    colors: [AppColors.cyanCalm, Color(0xFF0F766E)],
                   ),
                   route: '/secretary',
                 ),
               ),
             ],
-          )
-        else
+          ),
+          const SizedBox(height: 14),
+          _buildRoleCard(
+            context,
+            isDark: isDark,
+            icon: Icons.medical_information_rounded,
+            title: 'Nurse',
+            subtitle: 'Patient triage, vitals & clinical assistance',
+            gradient: const LinearGradient(
+              colors: [Color(0xFFEC4899), Color(0xFFBE185D)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            route: '/nurse',
+            isLocked: true,
+            badgeText: 'COMING SOON',
+            onLockedTap: () =>
+                _showLockedStationDialog(context, 'Nurse', isDark),
+          ),
+        ] else
           Column(
             children: [
               _buildRoleCard(
@@ -534,17 +586,31 @@ class _LandingScreenState extends State<LandingScreen>
               _buildRoleCard(
                 context,
                 isDark: isDark,
-                icon: Icons.assignment_rounded,
-                title: 'Secretary',
-                subtitle:
-                    'Manage doctor queues, call patients & assign rooms',
+                icon: Icons.visibility_rounded,
+                title: 'Ophtha Dept',
+                subtitle: 'Ophthalmology queue, call patients & assign rooms',
                 gradient: const LinearGradient(
-                  colors: [
-                    AppColors.cyanCalm,
-                    Color(0xFF0F766E),
-                  ],
+                  colors: [AppColors.cyanCalm, Color(0xFF0F766E)],
                 ),
                 route: '/secretary',
+              ),
+              const SizedBox(height: 14),
+              _buildRoleCard(
+                context,
+                isDark: isDark,
+                icon: Icons.medical_information_rounded,
+                title: 'Nurse',
+                subtitle: 'Patient triage, vitals & clinical assistance',
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFEC4899), Color(0xFFBE185D)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                route: '/nurse',
+                isLocked: true,
+                badgeText: 'COMING SOON',
+                onLockedTap: () =>
+                    _showLockedStationDialog(context, 'Nurse', isDark),
               ),
             ],
           ),

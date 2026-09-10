@@ -14,6 +14,7 @@ class PatientProvider extends ChangeNotifier {
   Patient? _selectedPatient;
   List<VisitRecord> _selectedPatientVisits = [];
   bool _isLoading = false;
+  bool _visitsLoading = false;
   String _searchQuery = '';
 
   List<Patient> get patients => _patients;
@@ -21,6 +22,7 @@ class PatientProvider extends ChangeNotifier {
   Patient? get selectedPatient => _selectedPatient;
   List<VisitRecord> get selectedPatientVisits => _selectedPatientVisits;
   bool get isLoading => _isLoading;
+  bool get visitsLoading => _visitsLoading;
   String get searchQuery => _searchQuery;
 
   /// Initialize and load patients
@@ -49,14 +51,24 @@ class PatientProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Select a patient for viewing
+  /// Select a patient for viewing — loads patient data immediately, then
+  /// fetches fresh visit history directly from Supabase in the background.
   Future<void> selectPatient(String patientId) async {
+    // Step 1: load the patient record and show what we have in cache first.
     _selectedPatient = await _repo.getPatient(patientId);
-    if (_selectedPatient != null) {
-      _selectedPatientVisits =
-          await _repo.getVisitHistory(patientId);
-    }
+    _selectedPatientVisits = await _repo.getVisitHistory(patientId);
+    _visitsLoading = true;
     notifyListeners();
+
+    // Step 2: fetch fresh visits from Supabase (bypasses stale cache).
+    try {
+      _selectedPatientVisits = await _repo.fetchVisitHistory(patientId);
+    } catch (_) {
+      // Keep whatever the cache already provided.
+    } finally {
+      _visitsLoading = false;
+      notifyListeners();
+    }
   }
 
   /// Clear selection

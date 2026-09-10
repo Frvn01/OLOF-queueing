@@ -143,7 +143,11 @@ class _SearchablePickerDialogState<T> extends State<_SearchablePickerDialog<T>> 
                     TextButton.icon(
                       onPressed: () {
                         Navigator.of(context).pop();
-                        widget.onAddNew!();
+                        // Defer onAddNew until after the dialog is fully disposed
+                        // to avoid the '_dependents.isEmpty' assertion error.
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          widget.onAddNew!();
+                        });
                       },
                       icon: const Icon(Icons.add_rounded, size: 18),
                       label: Text(widget.addNewLabel),
@@ -266,7 +270,11 @@ class _SearchablePickerDialogState<T> extends State<_SearchablePickerDialog<T>> 
                               ElevatedButton.icon(
                                 onPressed: () {
                                   Navigator.of(context).pop();
-                                  widget.onAddNew!();
+                                  // Defer onAddNew until after the dialog is fully disposed
+                                  // to avoid the '_dependents.isEmpty' assertion error.
+                                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                                    widget.onAddNew!();
+                                  });
                                 },
                                 icon: const Icon(Icons.add_rounded, size: 16),
                                 label: Text(widget.addNewLabel),

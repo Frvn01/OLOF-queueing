@@ -133,11 +133,35 @@ class PatientRepository {
     await _saveToStorage();
   }
 
-  /// Get visit history for a patient
+  /// Get visit history for a patient (from in-memory cache)
   Future<List<VisitRecord>> getVisitHistory(String patientId) async {
     if (!_loaded) await _loadFromStorage();
     return _visits.where((v) => v.patientId == patientId).toList()
       ..sort((a, b) => b.visitDate.compareTo(a.visitDate));
+  }
+
+  /// Fetch visit history directly from Supabase (fresh, bypasses cache).
+  /// Falls back to the local cache if Supabase is not available.
+  Future<List<VisitRecord>> fetchVisitHistory(String patientId) async {
+    if (isSupabase) {
+      try {
+        final data = await SupabaseService.client
+            .from('visit_records')
+            .select()
+            .eq('patient_id', patientId)
+            .order('visit_date', ascending: false);
+        final fetched =
+            (data as List).map((j) => VisitRecord.fromJson(j)).toList();
+        // Merge fresh records into the local cache so other callers benefit.
+        _visits.removeWhere((v) => v.patientId == patientId);
+        _visits.addAll(fetched);
+        return fetched;
+      } catch (e) {
+        debugPrint('Supabase fetchVisitHistory error: $e');
+      }
+    }
+    // Fallback to cache
+    return getVisitHistory(patientId);
   }
 
   /// Add a visit record

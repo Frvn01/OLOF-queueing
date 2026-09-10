@@ -61,6 +61,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Doctor? _selectedDoctor;
   ClinicRoom? _selectedRoom;
 
+  // Past Medical History checkboxes
+  bool _pmhHypertension = false;
+  bool _pmhDM = false;
+  bool _pmhAllergies = false;
+  bool _pmhOperations = false;
+  bool _pmhMedications = false;
+  bool _pmhGlaucoma = false;
+  final _pmhOtherController = TextEditingController();
+
   @override
   void dispose() {
     _firstNameController.dispose();
@@ -73,6 +82,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _chiefComplaintController.dispose();
     _historyIllnessController.dispose();
     _pastMedicalController.dispose();
+    _pmhOtherController.dispose();
     super.dispose();
   }
 
@@ -801,6 +811,129 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  /// ── Past Medical History Section (checkbox-based per clinic form) ──────
+  Widget _buildPastMedicalHistorySection(bool isDark, bool isLandscape) {
+    final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final cardBg = isDark
+        ? AppColors.surfaceLight.withValues(alpha: 0.25)
+        : AppColors.lightBg;
+    final borderColor = isDark ? AppColors.surfaceHover : AppColors.lightBorder;
+
+    Widget checkItem(String label, bool value, ValueChanged<bool?> onChanged, {Color? accent}) {
+      return InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => onChanged(!value),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: Checkbox(
+                  value: value,
+                  onChanged: onChanged,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  activeColor: accent ?? AppColors.primary,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: value ? (accent ?? AppColors.primary) : titleColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final leftItems = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        checkItem('Hypertension', _pmhHypertension, (v) => setState(() => _pmhHypertension = v!), accent: AppColors.urgent),
+        const SizedBox(height: 2),
+        checkItem('DM (Diabetes Mellitus)', _pmhDM, (v) => setState(() => _pmhDM = v!), accent: AppColors.warning),
+        const SizedBox(height: 2),
+        checkItem('Allergies', _pmhAllergies, (v) => setState(() => _pmhAllergies = v!), accent: AppColors.onHold),
+      ],
+    );
+
+    final rightItems = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        checkItem('Operations', _pmhOperations, (v) => setState(() => _pmhOperations = v!)),
+        const SizedBox(height: 2),
+        checkItem('Medications', _pmhMedications, (v) => setState(() => _pmhMedications = v!)),
+        const SizedBox(height: 2),
+        checkItem('Glaucoma', _pmhGlaucoma, (v) => setState(() => _pmhGlaucoma = v!), accent: AppColors.cyanCalm),
+      ],
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.medical_services_rounded, size: 16, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Past Medical History',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  color: titleColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (isLandscape)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: leftItems),
+                const SizedBox(width: 24),
+                Expanded(child: rightItems),
+              ],
+            )
+          else ...[
+            leftItems,
+            const SizedBox(height: 4),
+            rightItems,
+          ],
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _pmhOtherController,
+            style: TextStyle(color: titleColor, fontWeight: FontWeight.w700),
+            decoration: InputDecoration(
+              labelText: 'Other relevant history',
+              hintText: 'Additional notes, surgeries, conditions...',
+              prefixIcon: const Icon(Icons.notes_rounded, size: 18),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+            maxLines: isLandscape ? 1 : 2,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMedicalStep(bool isDark, bool isCompact, bool isLandscape) {
     final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
     final gap = isLandscape ? 10.0 : 16.0;
@@ -864,16 +997,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ],
         SizedBox(height: gap),
-        TextFormField(
-          controller: _pastMedicalController,
-          style: TextStyle(color: titleColor, fontWeight: FontWeight.w700),
-          decoration: const InputDecoration(
-            labelText: 'Past Medical & Surgical History',
-            prefixIcon: Icon(Icons.medical_services_rounded),
-            hintText: 'Hypertension, diabetes, allergies, surgeries...',
-          ),
-          maxLines: maxLines,
-        ),
+        _buildPastMedicalHistorySection(isDark, isLandscape),
         SizedBox(height: gap + 6),
 
         // ── First Time Check-up Question ───────────────────────
@@ -1718,9 +1842,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _historyIllnessController.text.trim().isNotEmpty
                     ? _historyIllnessController.text.trim()
                     : null,
-            pastMedicalHistory: _pastMedicalController.text.trim().isNotEmpty
-                ? _pastMedicalController.text.trim()
-                : null,
+            pastMedicalHistory: () {
+                final parts = <String>[];
+                if (_pmhHypertension) parts.add('Hypertension');
+                if (_pmhDM) parts.add('DM');
+                if (_pmhAllergies) parts.add('Allergies');
+                if (_pmhOperations) parts.add('Operations');
+                if (_pmhMedications) parts.add('Medications');
+                if (_pmhGlaucoma) parts.add('Glaucoma');
+                if (_pmhOtherController.text.trim().isNotEmpty) {
+                  parts.add(_pmhOtherController.text.trim());
+                }
+                return parts.isEmpty ? null : parts.join(', ');
+              }(),
             isFirstTime: _isFirstTime,
             assignedDoctor: _selectedDoctor?.name,
             assignedRoom: _selectedRoom?.name,
