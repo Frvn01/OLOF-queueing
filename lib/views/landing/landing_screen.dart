@@ -61,80 +61,7 @@ class _LandingScreenState extends State<LandingScreen>
     super.dispose();
   }
 
-  void _showLockedStationDialog(
-      BuildContext context, String roleName, bool isDark) {
-    final titleColor =
-        isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
-    final subtitleColor =
-        isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
 
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? AppColors.surfaceMid : AppColors.lightSurface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
-          side: BorderSide(
-            color: isDark ? AppColors.surfaceLight : AppColors.lightBorder,
-            width: 1.5,
-          ),
-        ),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.warning.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.lock_clock_rounded,
-                  color: AppColors.warning, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                '$roleName Station Locked',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  color: titleColor,
-                ),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'The $roleName module is currently locked on Desktop for future updates.',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: titleColor,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Staff operations for $roleName are optimized for clinic Mobile & Tablet kiosk devices.\n\nOn Desktop, you can launch the Public TV Queue Display for waiting lobby monitors.',
-              style: TextStyle(
-                fontSize: 13,
-                color: subtitleColor,
-                height: 1.45,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Understood'),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -293,8 +220,6 @@ class _LandingScreenState extends State<LandingScreen>
   }
 
   /// Desktop Station Layout:
-  /// - TV Queue Display (what is on Web) unlocked and prominent
-  /// - Receptionist and Secretary locked for future updates
   Widget _buildDesktopStations(
     BuildContext context,
     bool isDark,
@@ -303,6 +228,11 @@ class _LandingScreenState extends State<LandingScreen>
   ) {
     return Column(
       children: [
+        // Featured Admin Desktop Workstation Card
+        _buildFeaturedAdminCard(context, isDark: isDark),
+
+        const SizedBox(height: 18),
+
         // Live TV Display Header
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -334,22 +264,20 @@ class _LandingScreenState extends State<LandingScreen>
 
         const SizedBox(height: 24),
 
-        // Locked Staff Stations Header
+        // Clinical & Staff Stations Header
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.lock_outline_rounded,
-              size: 14,
-              color: isDark
-                  ? AppColors.textSecondary
-                  : AppColors.lightTextSecondary,
+            const Icon(
+              Icons.domain_verification_rounded,
+              size: 15,
+              color: Color(0xFF0D9488),
             ),
             const SizedBox(width: 6),
             Text(
-              'STAFF KIOSK MODULES (MOBILE & TABLET EXCLUSIVE)',
+              'CLINICAL & STAFF WORKSTATIONS',
               style: TextStyle(
-                fontSize: 11.5,
+                fontSize: 12,
                 fontWeight: FontWeight.w900,
                 color: isDark
                     ? AppColors.textSecondary
@@ -361,7 +289,7 @@ class _LandingScreenState extends State<LandingScreen>
         ),
         const SizedBox(height: 12),
 
-        // Receptionist, Ophtha Dept & Nurse (LOCKED on Desktop)
+        // Desktop Stations Grid
         if (isWide)
           Row(
             children: [
@@ -369,37 +297,13 @@ class _LandingScreenState extends State<LandingScreen>
                 child: _buildRoleCard(
                   context,
                   isDark: isDark,
-                  icon: Icons.person_add_rounded,
-                  title: 'Receptionist',
-                  subtitle: 'Register patients, scan QR & issue tickets',
-                  gradient: AppColors.primaryGradient,
-                  route: '/receptionist',
-                  isLocked: true,
-                  badgeText: 'LOCKED • FUTURE UPDATES',
-                  onLockedTap: () =>
-                      _showLockedStationDialog(context, 'Receptionist', isDark),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildRoleCard(
-                  context,
-                  isDark: isDark,
-                  icon: Icons.visibility_rounded,
-                  title: 'Ophtha Dept',
-                  subtitle:
-                      'Ophthalmology queue, call patients & assign rooms',
+                  icon: Icons.medical_services_rounded,
+                  title: 'Doctor',
+                  subtitle: 'Consultations, patient symptoms & nurse drawings',
                   gradient: const LinearGradient(
-                    colors: [
-                      AppColors.cyanCalm,
-                      Color(0xFF0F766E),
-                    ],
+                    colors: [Color(0xFF059669), Color(0xFF047857)],
                   ),
-                  route: '/secretary',
-                  isLocked: true,
-                  badgeText: 'LOCKED • FUTURE UPDATES',
-                  onLockedTap: () =>
-                      _showLockedStationDialog(context, 'Ophtha Dept', isDark),
+                  route: '/doctor',
                 ),
               ),
               const SizedBox(width: 16),
@@ -409,17 +313,37 @@ class _LandingScreenState extends State<LandingScreen>
                   isDark: isDark,
                   icon: Icons.medical_information_rounded,
                   title: 'Nurse',
-                  subtitle: 'Patient triage, vitals & clinical assistance',
+                  subtitle: 'Patient triage, vitals & clinical drawings',
                   gradient: const LinearGradient(
                     colors: [Color(0xFFEC4899), Color(0xFFBE185D)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
                   ),
                   route: '/nurse',
-                  isLocked: true,
-                  badgeText: 'COMING SOON',
-                  onLockedTap: () =>
-                      _showLockedStationDialog(context, 'Nurse', isDark),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildRoleCard(
+                  context,
+                  isDark: isDark,
+                  icon: Icons.person_add_rounded,
+                  title: 'Receptionist',
+                  subtitle: 'Register patients, scan QR & issue tickets',
+                  gradient: AppColors.primaryGradient,
+                  route: '/receptionist',
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildRoleCard(
+                  context,
+                  isDark: isDark,
+                  icon: Icons.visibility_rounded,
+                  title: 'Ophtha Dept',
+                  subtitle: 'Ophthalmology queue, call patients & assign rooms',
+                  gradient: const LinearGradient(
+                    colors: [AppColors.cyanCalm, Color(0xFF0F766E)],
+                  ),
+                  route: '/secretary',
                 ),
               ),
             ],
@@ -430,35 +354,13 @@ class _LandingScreenState extends State<LandingScreen>
               _buildRoleCard(
                 context,
                 isDark: isDark,
-                icon: Icons.person_add_rounded,
-                title: 'Receptionist',
-                subtitle: 'Register patients, scan QR & issue tickets',
-                gradient: AppColors.primaryGradient,
-                route: '/receptionist',
-                isLocked: true,
-                badgeText: 'LOCKED • FUTURE UPDATES',
-                onLockedTap: () =>
-                    _showLockedStationDialog(context, 'Receptionist', isDark),
-              ),
-              const SizedBox(height: 12),
-              _buildRoleCard(
-                context,
-                isDark: isDark,
-                icon: Icons.visibility_rounded,
-                title: 'Ophtha Dept',
-                subtitle:
-                    'Ophthalmology queue, call patients & assign rooms',
+                icon: Icons.medical_services_rounded,
+                title: 'Doctor',
+                subtitle: 'Consultations, patient symptoms & nurse drawings',
                 gradient: const LinearGradient(
-                  colors: [
-                    AppColors.cyanCalm,
-                    Color(0xFF0F766E),
-                  ],
+                  colors: [Color(0xFF059669), Color(0xFF047857)],
                 ),
-                route: '/secretary',
-                isLocked: true,
-                badgeText: 'LOCKED • FUTURE UPDATES',
-                onLockedTap: () =>
-                    _showLockedStationDialog(context, 'Ophtha Dept', isDark),
+                route: '/doctor',
               ),
               const SizedBox(height: 12),
               _buildRoleCard(
@@ -466,40 +368,41 @@ class _LandingScreenState extends State<LandingScreen>
                 isDark: isDark,
                 icon: Icons.medical_information_rounded,
                 title: 'Nurse',
-                subtitle: 'Patient triage, vitals & clinical assistance',
+                subtitle: 'Patient triage, vitals & clinical drawings',
                 gradient: const LinearGradient(
                   colors: [Color(0xFFEC4899), Color(0xFFBE185D)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
                 ),
                 route: '/nurse',
-                isLocked: true,
-                badgeText: 'COMING SOON',
-                onLockedTap: () =>
-                    _showLockedStationDialog(context, 'Nurse', isDark),
+              ),
+              const SizedBox(height: 12),
+              _buildRoleCard(
+                context,
+                isDark: isDark,
+                icon: Icons.person_add_rounded,
+                title: 'Receptionist',
+                subtitle: 'Register patients, scan QR & issue tickets',
+                gradient: AppColors.primaryGradient,
+                route: '/receptionist',
+              ),
+              const SizedBox(height: 12),
+              _buildRoleCard(
+                context,
+                isDark: isDark,
+                icon: Icons.visibility_rounded,
+                title: 'Ophtha Dept',
+                subtitle: 'Ophthalmology queue, call patients & assign rooms',
+                gradient: const LinearGradient(
+                  colors: [AppColors.cyanCalm, Color(0xFF0F766E)],
+                ),
+                route: '/secretary',
               ),
             ],
           ),
-
-        const SizedBox(height: 12),
-        Text(
-          'Staff stations are reserved for mobile/tablet kiosks. Desktop support will be enabled in future updates.',
-          style: TextStyle(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w500,
-            color: isDark
-                ? AppColors.textDisabled
-                : AppColors.lightTextDisabled,
-          ),
-          textAlign: TextAlign.center,
-        ),
       ],
     );
   }
 
   /// Mobile & Tablet Station Layout (Exclusive):
-  /// - Receptionist and Secretary unlocked as staff kiosks
-  /// - No TV Display (mobile is exclusively for staff operations)
   Widget _buildMobileStations(
     BuildContext context,
     bool isDark,
@@ -510,7 +413,7 @@ class _LandingScreenState extends State<LandingScreen>
       children: [
         // Role Selection Header
         Text(
-          'SELECT STAFF STATION',
+          'SELECT CLINICAL STATION',
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w900,
@@ -523,6 +426,38 @@ class _LandingScreenState extends State<LandingScreen>
         const SizedBox(height: 16),
 
         if (isWide) ...[
+          Row(
+            children: [
+              Expanded(
+                child: _buildRoleCard(
+                  context,
+                  isDark: isDark,
+                  icon: Icons.medical_services_rounded,
+                  title: 'Doctor Station',
+                  subtitle: 'Review nurse drawings, vitals & conduct consultation',
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF059669), Color(0xFF047857)],
+                  ),
+                  route: '/doctor',
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildRoleCard(
+                  context,
+                  isDark: isDark,
+                  icon: Icons.medical_information_rounded,
+                  title: 'Nurse Station',
+                  subtitle: 'Patient triage, vitals & clinical drawings',
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFEC4899), Color(0xFFBE185D)],
+                  ),
+                  route: '/nurse',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
@@ -556,23 +491,41 @@ class _LandingScreenState extends State<LandingScreen>
           _buildRoleCard(
             context,
             isDark: isDark,
-            icon: Icons.medical_information_rounded,
-            title: 'Nurse',
-            subtitle: 'Patient triage, vitals & clinical assistance',
+            icon: Icons.admin_panel_settings_rounded,
+            title: 'Admin Workstation',
+            subtitle: 'Clinic PC oversight, doctor queues & user management',
             gradient: const LinearGradient(
-              colors: [Color(0xFFEC4899), Color(0xFFBE185D)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              colors: [Color(0xFF065F46), Color(0xFF0D9488)],
             ),
-            route: '/nurse',
-            isLocked: true,
-            badgeText: 'COMING SOON',
-            onLockedTap: () =>
-                _showLockedStationDialog(context, 'Nurse', isDark),
+            route: '/admin',
           ),
         ] else
           Column(
             children: [
+              _buildRoleCard(
+                context,
+                isDark: isDark,
+                icon: Icons.medical_services_rounded,
+                title: 'Doctor Station',
+                subtitle: 'Review nurse drawings, vitals & conduct consultation',
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF059669), Color(0xFF047857)],
+                ),
+                route: '/doctor',
+              ),
+              const SizedBox(height: 14),
+              _buildRoleCard(
+                context,
+                isDark: isDark,
+                icon: Icons.medical_information_rounded,
+                title: 'Nurse Station',
+                subtitle: 'Patient triage, vitals & clinical drawings',
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFEC4899), Color(0xFFBE185D)],
+                ),
+                route: '/nurse',
+              ),
+              const SizedBox(height: 14),
               _buildRoleCard(
                 context,
                 isDark: isDark,
@@ -598,24 +551,102 @@ class _LandingScreenState extends State<LandingScreen>
               _buildRoleCard(
                 context,
                 isDark: isDark,
-                icon: Icons.medical_information_rounded,
-                title: 'Nurse',
-                subtitle: 'Patient triage, vitals & clinical assistance',
+                icon: Icons.admin_panel_settings_rounded,
+                title: 'Admin Workstation',
+                subtitle: 'Clinic PC oversight, doctor queues & user management',
                 gradient: const LinearGradient(
-                  colors: [Color(0xFFEC4899), Color(0xFFBE185D)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF065F46), Color(0xFF0D9488)],
                 ),
-                route: '/nurse',
-                isLocked: true,
-                badgeText: 'COMING SOON',
-                onLockedTap: () =>
-                    _showLockedStationDialog(context, 'Nurse', isDark),
+                route: '/admin',
               ),
             ],
           ),
-
       ],
+    );
+  }
+
+  /// Featured Admin Desktop Workstation Card (Clinic PC)
+  Widget _buildFeaturedAdminCard(BuildContext context, {required bool isDark}) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF065F46), Color(0xFF0D9488)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF059669).withValues(alpha: 0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: () => context.push('/admin'),
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: Row(
+              children: [
+                const OlofLogo(size: 56, showBorder: true),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text(
+                            'Admin Desktop Workstation',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.cyanAccent,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              'CLINIC PC',
+                              style: TextStyle(
+                                color: Color(0xFF0F172A),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Room-by-room doctor oversight (Serving, Next, Waiting), staff management, local storage & reports',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

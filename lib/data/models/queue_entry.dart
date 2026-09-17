@@ -1,3 +1,5 @@
+import 'vital_signs.dart';
+
 /// Queue entry representing a patient in the queue
 class QueueEntry {
   final String id;
@@ -14,6 +16,9 @@ class QueueEntry {
   final DateTime createdAt;
   final DateTime? calledAt;
   final DateTime? completedAt;
+  final VitalSigns? vitalSigns;
+  final String? assistedBy;
+  final String source; // 'walkin' or 'scheduled'
 
   QueueEntry({
     required this.id,
@@ -30,6 +35,9 @@ class QueueEntry {
     DateTime? createdAt,
     this.calledAt,
     this.completedAt,
+    this.vitalSigns,
+    this.assistedBy,
+    this.source = 'walkin',
   }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
@@ -47,29 +55,39 @@ class QueueEntry {
         'created_at': createdAt.toIso8601String(),
         'called_at': calledAt?.toIso8601String(),
         'completed_at': completedAt?.toIso8601String(),
+        if (vitalSigns != null) 'vital_signs': vitalSigns!.toJson(),
+        if (assistedBy != null) 'assisted_by': assistedBy,
+        'source': source,
       };
 
   factory QueueEntry.fromJson(Map<String, dynamic> json) => QueueEntry(
-        id: json['id'] as String,
-        patientId: json['patient_id'] as String,
-        patientName: json['patient_name'] as String,
-        patientPhoto: json['patient_photo'] as String?,
-        department: json['department'] as String,
-        queueNumber: json['queue_number'] as String,
-        purpose: json['purpose'] as String,
-        status: json['status'] as String? ?? 'waiting',
-        assignedRoom: json['assigned_room'] as String?,
-        assignedDoctor: json['assigned_doctor'] as String?,
-        dateKey: json['date_key'] as String,
+        id: json['id']?.toString() ?? '',
+        patientId: json['patient_id']?.toString() ?? '',
+        patientName: json['patient_name']?.toString() ?? 'Unknown',
+        patientPhoto: json['patient_photo']?.toString(),
+        department: json['department']?.toString() ?? 'ENT',
+        queueNumber: json['queue_number']?.toString() ?? '',
+        purpose: json['purpose']?.toString() ?? 'Consultation',
+        status: json['status']?.toString() ?? 'waiting',
+        assignedRoom: json['assigned_room']?.toString(),
+        assignedDoctor: json['assigned_doctor']?.toString(),
+        dateKey: json['date_key']?.toString() ?? '',
         createdAt: json['created_at'] != null
-            ? DateTime.parse(json['created_at'] as String)
-            : null,
+            ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
+            : DateTime.now(),
         calledAt: json['called_at'] != null
-            ? DateTime.parse(json['called_at'] as String)
+            ? DateTime.tryParse(json['called_at'].toString())
             : null,
         completedAt: json['completed_at'] != null
-            ? DateTime.parse(json['completed_at'] as String)
+            ? DateTime.tryParse(json['completed_at'].toString())
             : null,
+        vitalSigns: json['vital_signs'] != null && json['vital_signs'] is Map<String, dynamic>
+            ? VitalSigns.fromJson(json['vital_signs'] as Map<String, dynamic>)
+            : (json['temperature'] != null || json['blood_pressure'] != null || json['bp'] != null)
+                ? VitalSigns.fromJson(json)
+                : null,
+        assistedBy: json['assisted_by']?.toString() ?? json['nurse_name']?.toString(),
+        source: json['source']?.toString() ?? 'walkin',
       );
 
   QueueEntry copyWith({
@@ -78,6 +96,9 @@ class QueueEntry {
     String? assignedDoctor,
     DateTime? calledAt,
     DateTime? completedAt,
+    VitalSigns? vitalSigns,
+    String? assistedBy,
+    String? source,
   }) {
     return QueueEntry(
       id: id,
@@ -94,6 +115,9 @@ class QueueEntry {
       createdAt: createdAt,
       calledAt: calledAt ?? this.calledAt,
       completedAt: completedAt ?? this.completedAt,
+      vitalSigns: vitalSigns ?? this.vitalSigns,
+      assistedBy: assistedBy ?? this.assistedBy,
+      source: source ?? this.source,
     );
   }
 

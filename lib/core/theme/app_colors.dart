@@ -65,8 +65,24 @@ class AppColors {
   static const Color entColorDark = Color(0xFF0369A1);
   static const Color eyesColor = Color(0xFF2563EB);         // Royal Indigo for Eyes / Ophthalmology
   static const Color eyesColorDark = Color(0xFF1D4ED8);
+  static const Color entPrimary = entColor;
+  static const Color eyesPrimary = eyesColor;
+
+  // ── DOCTOR PALETTE (Medical Emerald - replaces harsh blue) ──
+  static const Color doctorPrimary = Color(0xFF059669);
+  static const Color doctorDark = Color(0xFF047857);
+  static const Color doctorDeep = Color(0xFF064E3B);
+  static const Color doctorLight = Color(0xFF10B981);
+  static const Color doctorSurfaceLight = Color(0xFFF0FDF4);
+  static const Color doctorSurfaceDark = Color(0xFF022C22);
 
   // ── GRADIENTS ──────────────────────────────────────────
+  static const LinearGradient doctorGradient = LinearGradient(
+    colors: [Color(0xFF047857), Color(0xFF059669), Color(0xFF064E3B)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [Color(0xFF0284C7), Color(0xFF0EA5E9)],
     begin: Alignment.topLeft,

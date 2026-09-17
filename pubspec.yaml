@@ -34,6 +34,12 @@ dependencies:
   # Audio
   audioplayers: ^6.4.0
 
+  # Color picker for Clinical Drawings
+  flutter_colorpicker: ^1.1.0
+
+  # File and Path Utilities
+  path_provider: ^2.1.2
+
   # Utilities
   uuid: ^4.5.1
   intl: ^0.20.2
@@ -48,3 +54,4 @@ flutter:
   assets:
     - assets/
     - assets/sounds/
+    - assets/diagrams/

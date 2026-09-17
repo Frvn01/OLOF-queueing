@@ -29,13 +29,13 @@ class PatientProvider extends ChangeNotifier {
   Future<void> initialize() async {
     _isLoading = true;
     notifyListeners();
-    _patients = await _repo.getPatients();
+    _patients = await _repo.getPatients(forceRefresh: true);
     _isLoading = false;
     notifyListeners();
 
     // Listen for realtime changes
     _repo.listenToChanges(() async {
-      _patients = await _repo.getPatients();
+      _patients = await _repo.getPatients(forceRefresh: true);
       notifyListeners();
     });
   }

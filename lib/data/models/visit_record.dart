@@ -38,17 +38,17 @@ class VisitRecord {
       };
 
   factory VisitRecord.fromJson(Map<String, dynamic> json) => VisitRecord(
-        id: json['id'] as String,
-        patientId: json['patient_id'] as String,
-        department: json['department'] as String,
-        purpose: json['purpose'] as String,
-        chiefComplaint: json['chief_complaint'] as String?,
-        diagnosis: json['diagnosis'] as String?,
-        notes: json['notes'] as String?,
-        assignedRoom: json['assigned_room'] as String?,
-        queueNumber: json['queue_number'] as String,
+        id: json['id']?.toString() ?? '',
+        patientId: json['patient_id']?.toString() ?? '',
+        department: json['department']?.toString() ?? 'ENT',
+        purpose: json['purpose']?.toString() ?? 'Consultation',
+        chiefComplaint: json['chief_complaint']?.toString(),
+        diagnosis: json['diagnosis']?.toString(),
+        notes: json['notes']?.toString(),
+        assignedRoom: json['assigned_room']?.toString(),
+        queueNumber: json['queue_number']?.toString() ?? '',
         visitDate: json['visit_date'] != null
-            ? DateTime.parse(json['visit_date'] as String)
+            ? DateTime.tryParse(json['visit_date'].toString())
             : null,
       );
 }

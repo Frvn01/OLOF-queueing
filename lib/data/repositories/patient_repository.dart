@@ -3,6 +3,7 @@ import 'package:storage_client/storage_client.dart';
 import '../models/patient.dart';
 import '../models/visit_record.dart';
 import '../services/supabase_service.dart';
+import '../services/local_storage_service.dart';
 import '../../core/utils/helpers.dart';
 
 /// Patient CRUD operations — Supabase with localStorage fallback
@@ -15,8 +16,8 @@ class PatientRepository {
   bool get isSupabase => SupabaseService.isConfigured;
 
   /// Load all patients
-  Future<List<Patient>> getPatients() async {
-    if (!_loaded) await _loadFromStorage();
+  Future<List<Patient>> getPatients({bool forceRefresh = false}) async {
+    if (!_loaded || forceRefresh) await _loadFromStorage();
     return List.unmodifiable(_patients);
   }
 
@@ -140,6 +141,12 @@ class PatientRepository {
       ..sort((a, b) => b.visitDate.compareTo(a.visitDate));
   }
 
+  /// Get all visit records across all patients
+  Future<List<VisitRecord>> getAllVisitRecords() async {
+    if (!_loaded) await _loadFromStorage();
+    return List.unmodifiable(_visits);
+  }
+
   /// Fetch visit history directly from Supabase (fresh, bypasses cache).
   /// Falls back to the local cache if Supabase is not available.
   Future<List<VisitRecord>> fetchVisitHistory(String patientId) async {
@@ -179,12 +186,24 @@ class PatientRepository {
     await _saveToStorage();
   }
 
-  /// Upload a patient photo to Supabase Storage and return the public URL.
-  /// [bytes] is the raw image bytes, [fileName] is e.g. "photo.jpg".
+  /// Upload a patient photo.
+  /// Under Option A, saves a local copy on Clinic PC disk to prevent storage quota overflow.
   Future<String?> uploadPhoto(String patientId, Uint8List bytes, String fileName) async {
-    if (!isSupabase) return null;
+    final ext = fileName.split('.').last.toLowerCase();
+    String? localPath;
     try {
-      final ext = fileName.split('.').last.toLowerCase();
+      localPath = await LocalStorageService.instance.savePhotoLocally(
+        patientId: patientId,
+        bytes: bytes,
+        ext: ext,
+      );
+    } catch (e) {
+      debugPrint('Local photo save note: $e');
+    }
+
+    if (!isSupabase) return localPath;
+
+    try {
       final path = 'patients/$patientId/profile.$ext';
       await SupabaseService.client.storage
           .from('patient-photos')
@@ -201,8 +220,8 @@ class PatientRepository {
           .getPublicUrl(path);
       return url;
     } catch (e) {
-      debugPrint('Photo upload error: $e');
-      return null;
+      debugPrint('Photo upload error (using local storage fallback): $e');
+      return localPath;
     }
   }
 
@@ -219,13 +238,34 @@ class PatientRepository {
       try {
         final pData =
             await SupabaseService.client.from('patients').select().order('created_at');
-        _patients = (pData as List).map((j) => Patient.fromJson(j)).toList();
+        final parsedPatients = <Patient>[];
+        for (final j in pData as List) {
+          try {
+            parsedPatients.add(Patient.fromJson(Map<String, dynamic>.from(j as Map)));
+          } catch (err) {
+            debugPrint('Notice: patient parse error for row: $err');
+          }
+        }
+        _patients = parsedPatients;
 
-        final vData = await SupabaseService.client
-            .from('visit_records')
-            .select()
-            .order('visit_date');
-        _visits = (vData as List).map((j) => VisitRecord.fromJson(j)).toList();
+        try {
+          final vData = await SupabaseService.client
+              .from('visit_records')
+              .select()
+              .order('visit_date');
+          final parsedVisits = <VisitRecord>[];
+          for (final j in vData as List) {
+            try {
+              parsedVisits.add(VisitRecord.fromJson(Map<String, dynamic>.from(j as Map)));
+            } catch (vErr) {
+              debugPrint('Notice: visit_record parse error: $vErr');
+            }
+          }
+          _visits = parsedVisits;
+        } catch (vFetchErr) {
+          debugPrint('Notice: visit_records fetch: $vFetchErr');
+        }
+
         _loaded = true;
         return;
       } catch (e) {

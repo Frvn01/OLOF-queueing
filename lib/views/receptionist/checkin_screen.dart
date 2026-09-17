@@ -46,6 +46,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
 
   // For QR / manual lookup
   final _patientNoController = TextEditingController();
+  final _chiefComplaintController = TextEditingController();
 
   @override
   void initState() {
@@ -92,11 +93,13 @@ class _CheckinScreenState extends State<CheckinScreen> {
   @override
   void dispose() {
     _patientNoController.dispose();
+    _chiefComplaintController.dispose();
     super.dispose();
   }
 
   void _applyPatientDefaults(Patient patient) {
     final clinic = context.read<ClinicProvider>();
+    _chiefComplaintController.text = patient.chiefComplaint ?? '';
     if (_selectedDoctor == null && patient.assignedDoctor != null && patient.assignedDoctor!.isNotEmpty) {
       try {
         final doc = clinic.doctors.firstWhere(
@@ -414,7 +417,10 @@ class _CheckinScreenState extends State<CheckinScreen> {
                       ),
                     ),
                     IconButton(
-                      onPressed: () => setState(() => _patient = null),
+                      onPressed: () => setState(() {
+                        _patient = null;
+                        _chiefComplaintController.clear();
+                      }),
                       icon: const Icon(Icons.close_rounded),
                       tooltip: 'Change patient',
                     ),
@@ -495,7 +501,50 @@ class _CheckinScreenState extends State<CheckinScreen> {
                   );
                 }).toList(),
               ),
-                     const SizedBox(height: 24),
+              const SizedBox(height: 20),
+
+              // Chief Complaint (Directly visible at Nurse Station)
+              Row(
+                children: [
+                  const Icon(
+                    Icons.record_voice_over_rounded,
+                    size: 18,
+                    color: Color(0xFFEC4899),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Chief Complaint / Reason for Visit (For Nurse & Doctor)",
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: titleColor,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _chiefComplaintController,
+                maxLines: 2,
+                style: TextStyle(
+                  color: titleColor,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'e.g. Blurry vision in left eye for 3 days, acute ear discomfort...',
+                  prefixIcon: const Icon(
+                    Icons.notes_rounded,
+                    size: 20,
+                    color: Color(0xFFEC4899),
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 24),
 
               // Doctor & Room Selection (Optional)
               Row(
@@ -970,15 +1019,41 @@ class _CheckinScreenState extends State<CheckinScreen> {
 
     setState(() => _isSubmitting = true);
 
+    final patientProv = context.read<PatientProvider>();
+    final queueProv = context.read<QueueProvider>();
+
     try {
-      final entry = await context.read<QueueProvider>().addToQueue(
+      // If receptionist updated chief complaint, doctor or room, sync it to patient profile
+      final enteredComplaint = _chiefComplaintController.text.trim();
+      final doctorName = _selectedDoctor?.name ?? _patient!.assignedDoctor;
+      final roomName = _selectedRoom?.name ?? _selectedDoctor?.room ?? _patient!.assignedRoom;
+
+      if (enteredComplaint != (_patient!.chiefComplaint ?? '') ||
+          doctorName != _patient!.assignedDoctor ||
+          roomName != _patient!.assignedRoom) {
+        final updatedPatient = _patient!.copyWith(
+          chiefComplaint: enteredComplaint.isNotEmpty ? enteredComplaint : _patient!.chiefComplaint,
+          assignedDoctor: doctorName,
+          assignedRoom: roomName,
+        );
+        try {
+          await patientProv.updatePatient(updatedPatient);
+          _patient = updatedPatient;
+        } catch (updateErr) {
+          debugPrint('Notice: could not update patient record during checkin: $updateErr');
+        }
+      }
+
+      if (!mounted) return;
+
+      final entry = await queueProv.addToQueue(
             patientId: _patient!.id,
             patientName: _patient!.displayName,
             patientPhoto: _patient!.photoUrl,
             department: _selectedDepartment!,
             purpose: _selectedPurpose!,
-            doctor: _selectedDoctor?.name ?? _patient!.assignedDoctor,
-            room: _selectedRoom?.name ?? _selectedDoctor?.room ?? _patient!.assignedRoom,
+            doctor: doctorName,
+            room: roomName,
           );
 
       setState(() {

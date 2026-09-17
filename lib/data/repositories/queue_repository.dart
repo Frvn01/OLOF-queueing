@@ -13,9 +13,9 @@ class QueueRepository {
   bool get isSupabase => SupabaseService.isConfigured;
 
   /// Load today's queue (auto-detects new day and resets to 001)
-  Future<List<QueueEntry>> getTodayQueue() async {
+  Future<List<QueueEntry>> getTodayQueue({bool forceRefresh = false}) async {
     final today = DateHelper.todayKey();
-    if (!_loaded || _lastLoadedDateKey != today) {
+    if (!_loaded || _lastLoadedDateKey != today || forceRefresh) {
       await _loadFromStorage();
     }
     return _entries.where((e) => e.dateKey == today).toList()
@@ -23,8 +23,8 @@ class QueueRepository {
   }
 
   /// Get queue for a specific department (today only)
-  Future<List<QueueEntry>> getDepartmentQueue(String department) async {
-    final queue = await getTodayQueue();
+  Future<List<QueueEntry>> getDepartmentQueue(String department, {bool forceRefresh = false}) async {
+    final queue = await getTodayQueue(forceRefresh: forceRefresh);
     return queue.where((e) => e.department == department).toList();
   }
 
@@ -123,6 +123,19 @@ class QueueRepository {
     return updateEntry(updated);
   }
 
+  /// Call a specific patient entry into a consultation room
+  Future<QueueEntry> callEntry(String entryId, {String? roomNumber, String? doctor}) async {
+    final idx = _entries.indexWhere((e) => e.id == entryId);
+    if (idx < 0) throw Exception('Entry not found');
+    final updated = _entries[idx].copyWith(
+      status: 'serving',
+      assignedRoom: roomNumber ?? _entries[idx].assignedRoom,
+      assignedDoctor: doctor ?? _entries[idx].assignedDoctor,
+      calledAt: DateTime.now(),
+    );
+    return updateEntry(updated);
+  }
+
   /// Mark a patient as completed
   Future<QueueEntry> markComplete(String entryId) async {
     final idx = _entries.indexWhere((e) => e.id == entryId);
@@ -171,6 +184,32 @@ class QueueRepository {
       }
     }
     _entries.removeWhere((e) => e.id == entryId);
+  }
+
+  /// Reassign a queue entry to another doctor or room
+  Future<void> reassignDoctorAndRoom(String entryId, {String? doctor, String? room}) async {
+    if (isSupabase) {
+      try {
+        final updates = <String, dynamic>{};
+        if (doctor != null) updates['assigned_doctor'] = doctor;
+        if (room != null) updates['assigned_room'] = room;
+        if (updates.isNotEmpty) {
+          await SupabaseService.client
+              .from('queue_entries')
+              .update(updates)
+              .eq('id', entryId);
+        }
+      } catch (e) {
+        debugPrint('Supabase queue reassign error: $e');
+      }
+    }
+    final idx = _entries.indexWhere((e) => e.id == entryId);
+    if (idx != -1) {
+      _entries[idx] = _entries[idx].copyWith(
+        assignedDoctor: doctor ?? _entries[idx].assignedDoctor,
+        assignedRoom: room ?? _entries[idx].assignedRoom,
+      );
+    }
   }
 
   /// Get queue statistics for today
@@ -308,8 +347,14 @@ class QueueRepository {
             .select()
             .eq('date_key', today)
             .order('created_at');
-        final todayEntries =
-            (data as List).map((j) => QueueEntry.fromJson(j)).toList();
+        final todayEntries = <QueueEntry>[];
+        for (final j in data as List) {
+          try {
+            todayEntries.add(QueueEntry.fromJson(Map<String, dynamic>.from(j as Map)));
+          } catch (rowErr) {
+            debugPrint('Notice: error parsing queue entry row: $rowErr');
+          }
+        }
 
         // Keep past cached entries and replace today's entries
         _entries.removeWhere((e) => e.dateKey == today);

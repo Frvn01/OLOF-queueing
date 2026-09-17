@@ -41,10 +41,10 @@ class QueueProvider extends ChangeNotifier {
       _stats[department] ?? {};
 
   /// Initialize and load today's queue
-  Future<void> initialize() async {
+  Future<void> initialize({bool forceRefresh = true}) async {
     _isLoading = true;
     notifyListeners();
-    await _refreshAll();
+    await _refreshAll(forceRefresh: forceRefresh);
     _isLoading = false;
     notifyListeners();
 
@@ -52,7 +52,7 @@ class QueueProvider extends ChangeNotifier {
 
     // Listen for realtime changes
     _repo.listenToChanges(() async {
-      await _refreshAll();
+      await _refreshAll(forceRefresh: true);
       notifyListeners();
     });
   }
@@ -130,6 +130,13 @@ class QueueProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Reassign patient to another doctor or room
+  Future<void> reassignDoctorAndRoom(String entryId, {String? doctor, String? room}) async {
+    await _repo.reassignDoctorAndRoom(entryId, doctor: doctor, room: room);
+    await _refreshAll();
+    notifyListeners();
+  }
+
   /// Get archived queue entries from past dates
   Future<List<QueueEntry>> getArchivedEntries({
     String? dateKey,
@@ -177,10 +184,10 @@ class QueueProvider extends ChangeNotifier {
   }
 
   /// Refresh all queue data
-  Future<void> _refreshAll() async {
-    _todayQueue = await _repo.getTodayQueue();
+  Future<void> _refreshAll({bool forceRefresh = false}) async {
+    _todayQueue = await _repo.getTodayQueue(forceRefresh: forceRefresh);
     for (final dept in ['ENT', 'EYES']) {
-      _departmentQueues[dept] = await _repo.getDepartmentQueue(dept);
+      _departmentQueues[dept] = await _repo.getDepartmentQueue(dept, forceRefresh: forceRefresh);
       _nowServing[dept] = await _repo.getCurrentServing(dept);
       _stats[dept] = await _repo.getStats(dept);
     }
@@ -188,7 +195,7 @@ class QueueProvider extends ChangeNotifier {
 
   /// Force refresh
   Future<void> refresh() async {
-    await _refreshAll();
+    await _refreshAll(forceRefresh: true);
     notifyListeners();
   }
 }

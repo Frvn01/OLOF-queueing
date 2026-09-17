@@ -1,3 +1,5 @@
+import 'vital_signs.dart';
+
 /// Patient data model
 class Patient {
   final String id;
@@ -19,6 +21,7 @@ class Patient {
   final bool isFirstTime;
   final String? assignedDoctor;
   final String? assignedRoom;
+  final VitalSigns? vitalSigns;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -42,6 +45,7 @@ class Patient {
     this.isFirstTime = true,
     this.assignedDoctor,
     this.assignedRoom,
+    this.vitalSigns,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -80,36 +84,47 @@ class Patient {
         'is_first_time': isFirstTime,
         'assigned_doctor': assignedDoctor,
         'assigned_room': assignedRoom,
+        if (vitalSigns != null) 'vital_signs': vitalSigns!.toJson(),
         'created_at': createdAt.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),
       };
 
   factory Patient.fromJson(Map<String, dynamic> json) => Patient(
-        id: json['id'] as String,
-        patientNo: json['patient_no'] as String,
-        firstName: json['first_name'] as String,
-        lastName: json['last_name'] as String,
-        middleName: json['middle_name'] as String?,
-        birthday: DateTime.parse(json['birthday'] as String),
-        sex: json['sex'] as String,
-        civilStatus: json['civil_status'] as String,
-        address: json['address'] as String,
-        contactNumber: json['contact_number'] as String,
-        occupation: json['occupation'] as String?,
-        referredBy: json['referred_by'] as String?,
-        photoUrl: json['photo_url'] as String?,
-        chiefComplaint: json['chief_complaint'] as String?,
+        id: json['id']?.toString() ?? '',
+        patientNo: json['patient_no']?.toString() ?? '',
+        firstName: json['first_name']?.toString() ?? '',
+        lastName: json['last_name']?.toString() ?? '',
+        middleName: json['middle_name']?.toString(),
+        birthday: json['birthday'] != null
+            ? (DateTime.tryParse(json['birthday'].toString()) ??
+                DateTime(2000, 1, 1))
+            : DateTime(2000, 1, 1),
+        sex: json['sex']?.toString() ?? 'Other',
+        civilStatus: json['civil_status']?.toString() ?? 'Single',
+        address: json['address']?.toString() ?? '',
+        contactNumber: json['contact_number']?.toString() ?? '',
+        occupation: json['occupation']?.toString(),
+        referredBy: json['referred_by']?.toString(),
+        photoUrl: json['photo_url']?.toString(),
+        chiefComplaint: json['chief_complaint']?.toString(),
         historyOfPresentIllness:
-            json['history_of_present_illness'] as String?,
-        pastMedicalHistory: json['past_medical_history'] as String?,
-        isFirstTime: json['is_first_time'] as bool? ?? true,
-        assignedDoctor: json['assigned_doctor'] as String?,
-        assignedRoom: json['assigned_room'] as String?,
+            json['history_of_present_illness']?.toString(),
+        pastMedicalHistory: json['past_medical_history']?.toString(),
+        isFirstTime: json['is_first_time'] == true ||
+            json['is_first_time'] == null ||
+            json['is_first_time'].toString() == 'true',
+        assignedDoctor: json['assigned_doctor']?.toString(),
+        assignedRoom: json['assigned_room']?.toString(),
+        vitalSigns: json['vital_signs'] != null && json['vital_signs'] is Map<String, dynamic>
+            ? VitalSigns.fromJson(json['vital_signs'] as Map<String, dynamic>)
+            : (json['temperature'] != null || json['blood_pressure'] != null || json['bp'] != null)
+                ? VitalSigns.fromJson(json)
+                : null,
         createdAt: json['created_at'] != null
-            ? DateTime.parse(json['created_at'] as String)
+            ? DateTime.tryParse(json['created_at'].toString())
             : null,
         updatedAt: json['updated_at'] != null
-            ? DateTime.parse(json['updated_at'] as String)
+            ? DateTime.tryParse(json['updated_at'].toString())
             : null,
       );
 
@@ -131,6 +146,7 @@ class Patient {
     bool? isFirstTime,
     String? assignedDoctor,
     String? assignedRoom,
+    VitalSigns? vitalSigns,
   }) {
     return Patient(
       id: id,
@@ -153,6 +169,7 @@ class Patient {
       isFirstTime: isFirstTime ?? this.isFirstTime,
       assignedDoctor: assignedDoctor ?? this.assignedDoctor,
       assignedRoom: assignedRoom ?? this.assignedRoom,
+      vitalSigns: vitalSigns ?? this.vitalSigns,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
     );

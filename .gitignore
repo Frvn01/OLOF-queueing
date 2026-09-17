@@ -1,3 +1,13 @@
+# Windows reserved device names (invalid paths)
+nul
+nul.*
+
+# Local server room storage (never commit binary files or local SQLite DB)
+server/storage/
+server/venv/
+server/__pycache__/
+server/*.db
+
 # Miscellaneous
 *.class
 *.log

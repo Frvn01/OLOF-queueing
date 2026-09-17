@@ -164,6 +164,46 @@ class ClinicProvider extends ChangeNotifier {
     }
   }
 
+  /// Update an existing doctor's profile/details
+  Future<void> updateDoctor(Doctor updated) async {
+    final idx = _doctors.indexWhere((d) => d.id == updated.id || d.name.toLowerCase() == updated.name.toLowerCase());
+    if (idx != -1) {
+      _doctors[idx] = updated;
+    } else {
+      _doctors.add(updated);
+    }
+    notifyListeners();
+
+    if (isSupabase) {
+      try {
+        await SupabaseService.client.from('clinic_doctors').upsert(updated.toJson());
+      } catch (e) {
+        debugPrint('Supabase upsert doctor error: $e');
+      }
+    }
+  }
+
+  /// Toggle doctor active status
+  Future<void> toggleDoctorStatus(String id) async {
+    final idx = _doctors.indexWhere((d) => d.id == id);
+    if (idx != -1) {
+      final doc = _doctors[idx];
+      final updated = doc.copyWith(isActive: !doc.isActive);
+      _doctors[idx] = updated;
+      notifyListeners();
+
+      if (isSupabase) {
+        try {
+          await SupabaseService.client
+              .from('clinic_doctors')
+              .update({'is_active': updated.isActive}).eq('id', id);
+        } catch (e) {
+          debugPrint('Supabase toggle doctor error: $e');
+        }
+      }
+    }
+  }
+
   /// Add a room one-by-one
   Future<ClinicRoom> addRoom({
     required String name,

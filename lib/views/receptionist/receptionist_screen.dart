@@ -7,7 +7,6 @@ import '../../providers/queue_provider.dart';
 import '../../shared/widgets/olof_logo.dart';
 import '../../shared/widgets/tutorial_dialog.dart';
 import '../../providers/theme_provider.dart';
-import 'widgets/clinic_management_dialog.dart';
 
 /// Receptionist Dashboard — main hub for registration and check-in
 class ReceptionistScreen extends StatefulWidget {
@@ -147,12 +146,6 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
               ],
             ),
           ),
-          // Doctors & Rooms Setup Button
-          IconButton(
-            icon: const Icon(Icons.medical_services_outlined, color: AppColors.primary),
-            tooltip: 'Manage Doctors & Rooms',
-            onPressed: () => showClinicManagementDialog(context, isDark: isDark),
-          ),
           // Queue Archive Button
           IconButton(
             icon: const Icon(Icons.archive_outlined, color: AppColors.cyanCalm),
@@ -266,17 +259,6 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
         onTap: () => context.go('/receptionist/checkin'),
       ),
       _QuickAction(
-        icon: Icons.medical_services_rounded,
-        label: 'Doctors & Rooms',
-        sublabel: 'Add & manage clinic staff & rooms',
-        gradient: const LinearGradient(
-          colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        onTap: () => showClinicManagementDialog(context, isDark: isDark),
-      ),
-      _QuickAction(
         icon: Icons.archive_outlined,
         label: 'Queue Archive',
         sublabel: 'Past patients by date & purpose',
@@ -291,7 +273,7 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
 
     final screenWidth = MediaQuery.of(context).size.width;
 
-    if (screenWidth >= 1100) {
+    if (screenWidth >= 900) {
       return Row(
         children: [
           Expanded(child: _buildActionCard(context, actions[0], isDark)),
@@ -299,8 +281,6 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
           Expanded(child: _buildActionCard(context, actions[1], isDark)),
           const SizedBox(width: 14),
           Expanded(child: _buildActionCard(context, actions[2], isDark)),
-          const SizedBox(width: 14),
-          Expanded(child: _buildActionCard(context, actions[3], isDark)),
         ],
       );
     } else if (screenWidth >= 600) {
@@ -314,13 +294,7 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _buildActionCard(context, actions[2], isDark)),
-              const SizedBox(width: 14),
-              Expanded(child: _buildActionCard(context, actions[3], isDark)),
-            ],
-          ),
+          _buildActionCard(context, actions[2], isDark),
         ],
       );
     }
@@ -332,8 +306,6 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
         _buildActionCard(context, actions[1], isDark),
         const SizedBox(height: 12),
         _buildActionCard(context, actions[2], isDark),
-        const SizedBox(height: 12),
-        _buildActionCard(context, actions[3], isDark),
       ],
     );
   }

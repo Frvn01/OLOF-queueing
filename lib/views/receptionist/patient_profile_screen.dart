@@ -786,21 +786,21 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
 
     // Parse existing pastMedicalHistory string into checkbox booleans.
     // The string is stored as comma-separated keywords, e.g. "Hypertension, DM, Allergies".
-    final _existingPmh = (patient.pastMedicalHistory ?? '').toLowerCase();
-    bool _editPmhHypertension = _existingPmh.contains('hypertension');
-    bool _editPmhDM           = _existingPmh.contains('dm');
-    bool _editPmhAllergies    = _existingPmh.contains('allergies');
-    bool _editPmhOperations   = _existingPmh.contains('operations');
-    bool _editPmhMedications  = _existingPmh.contains('medications');
-    bool _editPmhGlaucoma     = _existingPmh.contains('glaucoma');
+    final existingPmh = (patient.pastMedicalHistory ?? '').toLowerCase();
+    bool editPmhHypertension = existingPmh.contains('hypertension');
+    bool editPmhDM           = existingPmh.contains('dm');
+    bool editPmhAllergies    = existingPmh.contains('allergies');
+    bool editPmhOperations   = existingPmh.contains('operations');
+    bool editPmhMedications  = existingPmh.contains('medications');
+    bool editPmhGlaucoma     = existingPmh.contains('glaucoma');
     // Everything that is NOT one of the named keywords goes into "Other".
-    final _knownKeywords = ['hypertension', 'dm', 'allergies', 'operations', 'medications', 'glaucoma'];
-    final _otherParts = (patient.pastMedicalHistory ?? '')
+    final knownKeywords = ['hypertension', 'dm', 'allergies', 'operations', 'medications', 'glaucoma'];
+    final otherParts = (patient.pastMedicalHistory ?? '')
         .split(',')
         .map((e) => e.trim())
-        .where((e) => e.isNotEmpty && !_knownKeywords.contains(e.toLowerCase()))
+        .where((e) => e.isNotEmpty && !knownKeywords.contains(e.toLowerCase()))
         .join(', ');
-    final pmhOtherCtrl = TextEditingController(text: _otherParts);
+    final pmhOtherCtrl = TextEditingController(text: otherParts);
 
     final cardBg =
         isDark ? AppColors.surfaceMid : AppColors.lightSurface;
@@ -1002,24 +1002,24 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                           children: [
                                             checkItem(
                                               'Hypertension',
-                                              _editPmhHypertension,
+                                              editPmhHypertension,
                                               (v) => setLocal(
-                                                  () => _editPmhHypertension = v),
+                                                  () => editPmhHypertension = v),
                                               accent: AppColors.urgent,
                                             ),
                                             const SizedBox(height: 2),
                                             checkItem(
                                               'DM (Diabetes Mellitus)',
-                                              _editPmhDM,
-                                              (v) => setLocal(() => _editPmhDM = v),
+                                              editPmhDM,
+                                              (v) => setLocal(() => editPmhDM = v),
                                               accent: AppColors.warning,
                                             ),
                                             const SizedBox(height: 2),
                                             checkItem(
                                               'Allergies',
-                                              _editPmhAllergies,
+                                              editPmhAllergies,
                                               (v) => setLocal(
-                                                  () => _editPmhAllergies = v),
+                                                  () => editPmhAllergies = v),
                                               accent: AppColors.onHold,
                                             ),
                                           ],
@@ -1033,23 +1033,23 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                           children: [
                                             checkItem(
                                               'Operations',
-                                              _editPmhOperations,
+                                              editPmhOperations,
                                               (v) => setLocal(
-                                                  () => _editPmhOperations = v),
+                                                  () => editPmhOperations = v),
                                             ),
                                             const SizedBox(height: 2),
                                             checkItem(
                                               'Medications',
-                                              _editPmhMedications,
+                                              editPmhMedications,
                                               (v) => setLocal(
-                                                  () => _editPmhMedications = v),
+                                                  () => editPmhMedications = v),
                                             ),
                                             const SizedBox(height: 2),
                                             checkItem(
                                               'Glaucoma',
-                                              _editPmhGlaucoma,
+                                              editPmhGlaucoma,
                                               (v) => setLocal(
-                                                  () => _editPmhGlaucoma = v),
+                                                  () => editPmhGlaucoma = v),
                                               accent: AppColors.cyanCalm,
                                             ),
                                           ],
@@ -1153,12 +1153,12 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
             : null,
         pastMedicalHistory: () {
           final parts = <String>[];
-          if (_editPmhHypertension) parts.add('Hypertension');
-          if (_editPmhDM) parts.add('DM');
-          if (_editPmhAllergies) parts.add('Allergies');
-          if (_editPmhOperations) parts.add('Operations');
-          if (_editPmhMedications) parts.add('Medications');
-          if (_editPmhGlaucoma) parts.add('Glaucoma');
+          if (editPmhHypertension) parts.add('Hypertension');
+          if (editPmhDM) parts.add('DM');
+          if (editPmhAllergies) parts.add('Allergies');
+          if (editPmhOperations) parts.add('Operations');
+          if (editPmhMedications) parts.add('Medications');
+          if (editPmhGlaucoma) parts.add('Glaucoma');
           if (pmhOtherCtrl.text.trim().isNotEmpty) {
             parts.add(pmhOtherCtrl.text.trim());
           }
