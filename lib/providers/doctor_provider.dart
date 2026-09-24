@@ -19,7 +19,7 @@ class DoctorProvider extends ChangeNotifier {
   // Active Doctor Information
   String _activeDoctor = AppConstants.departmentDoctors[AppConstants.deptEnt]!;
   String _activeDepartment = AppConstants.deptEnt;
-  String _activeRoom = 'Room 1';
+  String _activeRoom = 'ENT ROOM 1';
   String? _photoUrl;
   String _doctorEmail = '';
   String _doctorPhone = '';
@@ -105,7 +105,7 @@ class DoctorProvider extends ChangeNotifier {
   void selectDoctor({
     required String doctorName,
     required String department,
-    String room = 'Room 1',
+    String room = 'ENT ROOM 1',
     String? photoUrl,
     String? email,
     String? phone,
@@ -139,7 +139,7 @@ class DoctorProvider extends ChangeNotifier {
     selectDoctor(
       doctorName: doctor.name,
       department: doctor.department,
-      room: doctor.room ?? (doctor.department == AppConstants.deptEyes ? 'Room 2' : 'Room 1'),
+      room: doctor.room ?? (doctor.department == AppConstants.deptEyes ? 'OPHTHA ROOM 1' : 'ENT ROOM 1'),
       photoUrl: doctor.photoUrl,
       email: doctor.email,
       phone: doctor.phone,

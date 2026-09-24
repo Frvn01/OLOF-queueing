@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/app_image_helper.dart';
 import '../../data/models/patient.dart';
 import '../../providers/doctor_provider.dart';
 import '../../providers/queue_provider.dart';
@@ -279,8 +280,6 @@ class _DoctorPatientsScreenState extends State<DoctorPatientsScreen> {
     List todayQueue,
   ) {
     final inQueue = todayQueue.any((q) => q.patientId == patient.id);
-    final initials = (patient.firstName.isNotEmpty ? patient.firstName[0] : '') +
-        (patient.lastName.isNotEmpty ? patient.lastName[0] : '');
 
     return Card(
       elevation: 1.5,
@@ -300,17 +299,12 @@ class _DoctorPatientsScreenState extends State<DoctorPatientsScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
+                AppImageHelper.buildAvatar(
+                  photoUrl: patient.photoUrl,
+                  name: patient.fullName,
                   radius: 24,
                   backgroundColor: themeColor.withValues(alpha: 0.15),
-                  child: Text(
-                    initials.toUpperCase(),
-                    style: TextStyle(
-                      color: themeColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
+                  foregroundColor: themeColor,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -417,7 +411,7 @@ class _DoctorPatientsScreenState extends State<DoctorPatientsScreen> {
                     Icon(Icons.room_rounded, size: 14, color: Colors.grey.shade500),
                     const SizedBox(width: 4),
                     Text(
-                      patient.assignedRoom ?? 'Room 1',
+                      patient.assignedRoom ?? 'Consultation Room',
                       style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w500),
                     ),
                   ],

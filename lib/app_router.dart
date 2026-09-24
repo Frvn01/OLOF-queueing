@@ -15,6 +15,8 @@ import 'views/admin/admin_shell.dart';
 import 'views/doctor/doctor_shell.dart';
 import 'views/doctor/doctor_patient_detail_screen.dart';
 import 'views/doctor/doctor_consultation_screen.dart';
+import 'views/auth/qr_login_screen.dart';
+import 'views/auth/staff_qr_card_screen.dart';
 import 'data/models/queue_entry.dart';
 
 /// App router configuration
@@ -28,6 +30,19 @@ final GoRouter appRouter = GoRouter(
       path: '/',
       builder: (context, state) =>
           kIsWeb ? const DisplayScreen() : const LandingScreen(),
+    ),
+    // QR Code Login route
+    GoRoute(
+      path: '/auth/qr-login',
+      builder: (context, state) {
+        final roleHint = state.uri.queryParameters['role'];
+        return QrLoginScreen(roleHint: roleHint);
+      },
+    ),
+    // Staff QR Cards route (Admin view & print)
+    GoRoute(
+      path: '/auth/staff-cards',
+      builder: (context, state) => const StaffQrCardScreen(),
     ),
     // Display route (Dedicated for Web / TV projection)
     GoRoute(

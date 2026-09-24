@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/app_image_helper.dart';
 import '../../data/models/patient.dart';
 import '../../data/models/queue_entry.dart';
 import '../../providers/patient_provider.dart';
@@ -578,25 +579,38 @@ class _NurseStationScreenState extends State<NurseStationScreen>
             // Patient Name & Demographics
             Row(
               children: [
+                AppImageHelper.buildAvatar(
+                  photoUrl: entry.patientPhoto ?? patient?.photoUrl,
+                  name: entry.patientName,
+                  radius: 18,
+                  backgroundColor: deptColor.withValues(alpha: 0.15),
+                  foregroundColor: deptColor,
+                ),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    entry.patientName,
-                    style: TextStyle(
-                      fontSize: 16.5,
-                      fontWeight: FontWeight.w800,
-                      color: titleColor,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.patientName,
+                        style: TextStyle(
+                          fontSize: 16.5,
+                          fontWeight: FontWeight.w800,
+                          color: titleColor,
+                        ),
+                      ),
+                      if (patient != null)
+                        Text(
+                          '${patient.sex} • ${patient.age} yrs • No: ${patient.patientNo}',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: subtitleColor,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                if (patient != null)
-                  Text(
-                    '${patient.sex} • ${patient.age} yrs • No: ${patient.patientNo}',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      color: subtitleColor,
-                    ),
-                  ),
               ],
             ),
             const SizedBox(height: 6),
@@ -1023,9 +1037,12 @@ class _NurseStationScreenState extends State<NurseStationScreen>
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        leading: CircleAvatar(
+        leading: AppImageHelper.buildAvatar(
+          photoUrl: p.photoUrl,
+          name: p.fullName,
+          radius: 20,
           backgroundColor: const Color(0xFFEC4899).withValues(alpha: 0.15),
-          child: const Icon(Icons.person_rounded, color: Color(0xFFEC4899)),
+          foregroundColor: const Color(0xFFEC4899),
         ),
         title: Text(
           p.fullName,

@@ -4,6 +4,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/queue_entry.dart';
 import '../../providers/admin_provider.dart';
+import '../../providers/clinic_provider.dart';
 import '../../providers/queue_provider.dart';
 
 class AdminQueueScreen extends StatefulWidget {
@@ -21,6 +22,7 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
   Widget build(BuildContext context) {
     final queueProv = context.watch<QueueProvider>();
     final adminProv = context.watch<AdminProvider>();
+    final clinicProv = context.watch<ClinicProvider>();
     final allQueue = queueProv.todayQueue;
 
     // Filter queue if searching
@@ -71,8 +73,8 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
               SegmentedButton<String>(
                 segments: const [
                   ButtonSegment(value: 'ALL', label: Text('All Rooms')),
-                  ButtonSegment(value: AppConstants.deptEnt, label: Text('Room 1 (ENT)')),
-                  ButtonSegment(value: AppConstants.deptEyes, label: Text('Room 2 (EYES)')),
+                  ButtonSegment(value: AppConstants.deptEnt, label: Text('ENT Dept')),
+                  ButtonSegment(value: AppConstants.deptEyes, label: Text('EYES / Ophtha')),
                 ],
                 selected: {_selectedDeptFilter},
                 onSelectionChanged: (set) => setState(() => _selectedDeptFilter = set.first),
@@ -108,8 +110,10 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
                   Expanded(
                     child: _buildRoomColumn(
                       context: context,
-                      roomName: 'Room 1',
-                      doctorName: AppConstants.departmentDoctors[AppConstants.deptEnt]!,
+                      roomName: 'ENT ROOM 1',
+                      doctorName: clinicProv.getDoctors(department: AppConstants.deptEnt).isNotEmpty
+                          ? clinicProv.getDoctors(department: AppConstants.deptEnt).first.name
+                          : AppConstants.departmentDoctors[AppConstants.deptEnt]!,
                       department: AppConstants.deptEnt,
                       queue: displayedQueue,
                       adminProv: adminProv,
@@ -122,8 +126,10 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
                   Expanded(
                     child: _buildRoomColumn(
                       context: context,
-                      roomName: 'Room 2',
-                      doctorName: AppConstants.departmentDoctors[AppConstants.deptEyes]!,
+                      roomName: 'OPHTHA ROOM 1',
+                      doctorName: clinicProv.getDoctors(department: AppConstants.deptEyes).isNotEmpty
+                          ? clinicProv.getDoctors(department: AppConstants.deptEyes).first.name
+                          : AppConstants.departmentDoctors[AppConstants.deptEyes]!,
                       department: AppConstants.deptEyes,
                       queue: displayedQueue,
                       adminProv: adminProv,
@@ -467,7 +473,7 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
               const SizedBox(width: 8),
               ElevatedButton.icon(
                 onPressed: () {
-                  final room = entry.department == AppConstants.deptEnt ? 'Room 1' : 'Room 2';
+                  final room = entry.department == AppConstants.deptEnt ? 'ENT ROOM 1' : 'OPHTHA ROOM 1';
                   queueProv.reassignDoctorAndRoom(entry.id, doctor: doctorName, room: room);
                   queueProv.callNext(entry.department);
                 },
@@ -578,7 +584,9 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
 
   void _showReassignDialog(BuildContext context, QueueEntry entry) {
     String selectedDoctor = entry.assignedDoctor ?? AppConstants.departmentDoctors[AppConstants.deptEnt]!;
-    String selectedRoom = entry.assignedRoom ?? 'Room 1';
+    String selectedRoom = entry.assignedRoom ?? 'ENT ROOM 1';
+    final clinicProv = context.read<ClinicProvider>();
+    final allDoctors = clinicProv.doctors;
 
     showDialog(
       context: context,
@@ -591,21 +599,20 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
               DropdownButtonFormField<String>(
                 initialValue: selectedDoctor,
                 decoration: const InputDecoration(labelText: 'Assign to Doctor'),
-                items: [
-                  DropdownMenuItem(
-                    value: AppConstants.departmentDoctors[AppConstants.deptEnt]!,
-                    child: Text('Dr. Engr. Ranulfo Ramos (ENT)'),
-                  ),
-                  DropdownMenuItem(
-                    value: AppConstants.departmentDoctors[AppConstants.deptEyes]!,
-                    child: Text('Dr. Ranulfo Ramos Jr. (EYES)'),
-                  ),
-                ],
+                items: allDoctors.map((doc) => DropdownMenuItem(
+                  value: doc.name,
+                  child: Text('${doc.name} (${doc.department})'),
+                )).toList(),
                 onChanged: (val) {
                   if (val != null) {
                     setState(() {
                       selectedDoctor = val;
-                      selectedRoom = val.contains('Junior') || val.contains('Jr.') ? 'Room 2' : 'Room 1';
+                      // Auto-set room from doctor's assigned room
+                      final docObj = allDoctors.firstWhere(
+                        (d) => d.name == val,
+                        orElse: () => allDoctors.first,
+                      );
+                      selectedRoom = docObj.room ?? selectedRoom;
                     });
                   }
                 },
@@ -615,9 +622,12 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
                 initialValue: selectedRoom,
                 decoration: const InputDecoration(labelText: 'Consultation Room'),
                 items: const [
-                  DropdownMenuItem(value: 'Room 1', child: Text('Room 1')),
-                  DropdownMenuItem(value: 'Room 2', child: Text('Room 2')),
-                  DropdownMenuItem(value: 'Room 3', child: Text('Room 3 (Procedure)')),
+                  DropdownMenuItem(value: 'ENT ROOM 1', child: Text('ENT ROOM 1')),
+                  DropdownMenuItem(value: 'ENT ROOM 2', child: Text('ENT ROOM 2')),
+                  DropdownMenuItem(value: 'OPHTHA ROOM 1', child: Text('OPHTHA ROOM 1')),
+                  DropdownMenuItem(value: 'OPHTHA ROOM 2', child: Text('OPHTHA ROOM 2')),
+                  DropdownMenuItem(value: 'OPHTHA ROOM 3', child: Text('OPHTHA ROOM 3')),
+                  DropdownMenuItem(value: 'OPHTHA ROOM 4', child: Text('OPHTHA ROOM 4')),
                 ],
                 onChanged: (val) {
                   if (val != null) setState(() => selectedRoom = val);

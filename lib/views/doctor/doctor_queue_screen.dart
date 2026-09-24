@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/app_image_helper.dart';
 import '../../data/models/queue_entry.dart';
 import '../../data/models/vital_signs.dart';
 import '../../providers/doctor_provider.dart';
@@ -310,10 +311,12 @@ class _DoctorQueueScreenState extends State<DoctorQueueScreen> with SingleTicker
             // ── Patient Info ────────────────────────────────────────
             Row(
               children: [
-                CircleAvatar(
+                AppImageHelper.buildAvatar(
+                  photoUrl: entry.patientPhoto,
+                  name: entry.patientName,
                   radius: 18,
                   backgroundColor: themeColor.withValues(alpha: 0.12),
-                  child: Icon(Icons.person_rounded, color: themeColor, size: 20),
+                  foregroundColor: themeColor,
                 ),
                 const SizedBox(width: 10),
                 Expanded(

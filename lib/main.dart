@@ -43,7 +43,7 @@ class OlofQueueingApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ClinicProvider()),
         ChangeNotifierProvider(create: (_) => NurseProvider()),
         ChangeNotifierProvider(create: (_) => DoctorProvider()),
-        ChangeNotifierProvider(create: (_) => AdminProvider()),
+        ChangeNotifierProvider(create: (_) => AdminProvider()..loadStaff()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProv, _) {

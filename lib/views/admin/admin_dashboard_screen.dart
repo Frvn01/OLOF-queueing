@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/admin_provider.dart';
+import '../../providers/clinic_provider.dart';
 import '../../providers/queue_provider.dart';
 
 class AdminDashboardScreen extends StatelessWidget {
@@ -12,7 +13,15 @@ class AdminDashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final queueProv = context.watch<QueueProvider>();
     final adminProv = context.watch<AdminProvider>();
+    final clinicProv = context.watch<ClinicProvider>();
     final todayQueue = queueProv.todayQueue;
+
+    final entDoctor = clinicProv.getDoctors(department: AppConstants.deptEnt).isNotEmpty
+        ? clinicProv.getDoctors(department: AppConstants.deptEnt).first.name
+        : AppConstants.departmentDoctors[AppConstants.deptEnt]!;
+    final eyesDoctor = clinicProv.getDoctors(department: AppConstants.deptEyes).isNotEmpty
+        ? clinicProv.getDoctors(department: AppConstants.deptEyes).first.name
+        : AppConstants.departmentDoctors[AppConstants.deptEyes]!;
 
     final totalQueued = todayQueue.length;
     final servingCount = todayQueue.where((e) => e.isServing).length;
@@ -104,12 +113,12 @@ class AdminDashboardScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                         _buildRoomTile(
-                          roomName: 'Room 1 (ENT)',
-                          doctorName: AppConstants.departmentDoctors[AppConstants.deptEnt]!,
+                          roomName: 'ENT ROOM 1',
+                          doctorName: entDoctor,
                           department: AppConstants.deptEnt,
                           servingEntry: adminProv.getDoctorServing(
                             todayQueue,
-                            AppConstants.departmentDoctors[AppConstants.deptEnt]!,
+                            entDoctor,
                             AppConstants.deptEnt,
                           ),
                           waitingCount: todayQueue
@@ -118,12 +127,12 @@ class AdminDashboardScreen extends StatelessWidget {
                         ),
                         const Divider(height: 24),
                         _buildRoomTile(
-                          roomName: 'Room 2 (EYES)',
-                          doctorName: AppConstants.departmentDoctors[AppConstants.deptEyes]!,
+                          roomName: 'OPHTHA ROOM 1',
+                          doctorName: eyesDoctor,
                           department: AppConstants.deptEyes,
                           servingEntry: adminProv.getDoctorServing(
                             todayQueue,
-                            AppConstants.departmentDoctors[AppConstants.deptEyes]!,
+                            eyesDoctor,
                             AppConstants.deptEyes,
                           ),
                           waitingCount: todayQueue
@@ -132,9 +141,9 @@ class AdminDashboardScreen extends StatelessWidget {
                         ),
                         const Divider(height: 24),
                         _buildRoomTile(
-                          roomName: 'Room 3 (Procedure / Multi-Specialty)',
-                          doctorName: 'Available for Minor Procedures',
-                          department: 'PROCEDURE',
+                          roomName: 'OPHTHA ROOM 2',
+                          doctorName: 'Dr. DR. AMELIA REYES VERA CRUZ',
+                          department: AppConstants.deptEyes,
                           servingEntry: null,
                           waitingCount: 0,
                           isStandby: true,

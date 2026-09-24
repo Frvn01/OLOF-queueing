@@ -188,14 +188,19 @@ class _NurseDrawingScreenState extends State<NurseDrawingScreen> {
       ];
     }
 
+    String prefix = capitalized;
+    if (examLower == 'ear' || examLower == 'ears') {
+      prefix = 'Ears';
+    }
+
     final isPairedEars = (examLower == 'ears' || examLower == 'ear') && view != '3';
     if (isPairedEars) {
       return [
-        'assets/diagrams/$capitalized-$view-left.png',
-        'assets/diagrams/$capitalized-$view-right.png',
+        'assets/diagrams/$prefix-$view-left.png',
+        'assets/diagrams/$prefix-$view-right.png',
       ];
     } else {
-      final soloPath = 'assets/diagrams/$capitalized-$view-solo.png';
+      final soloPath = 'assets/diagrams/$prefix-$view-solo.png';
       return [soloPath, soloPath];
     }
   }
@@ -341,10 +346,13 @@ class _NurseDrawingScreenState extends State<NurseDrawingScreen> {
         );
       }
 
-      // 3. Build ClinicalExamination records for all views that have annotations or for all available views
+      // 3. Build ClinicalExamination records for active views or views with annotations
       final List<ClinicalExamination> examinationRecords = [];
       for (final view in availableViews) {
         final viewAnnotations = _annotationsByView[view] ?? [];
+        if (view != _currentView && viewAnnotations.isEmpty) {
+          continue;
+        }
         examinationRecords.add(
           ClinicalExamination(
             id: const Uuid().v4(),

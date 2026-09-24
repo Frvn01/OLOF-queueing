@@ -3,7 +3,7 @@ class Doctor {
   final String id;
   final String name; // e.g. 'Dr. Engr. Ranulfo Ramos'
   final String department; // 'ENT', 'EYES', or 'BOTH'
-  final String? room; // optional default room e.g. 'Room 1'
+  final String? room; // optional default room e.g. 'ENT ROOM 1'
   final String? photoUrl;
   final String? email;
   final String? phone;

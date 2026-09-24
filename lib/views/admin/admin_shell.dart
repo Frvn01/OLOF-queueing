@@ -31,6 +31,7 @@ class _AdminShellState extends State<AdminShell> {
     _currentIndex = widget.initialTab;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<QueueProvider>().initialize();
+      context.read<AdminProvider>().loadStaff();
       context.read<AdminProvider>().refreshStorageStats();
     });
   }

@@ -82,6 +82,33 @@ class LocalStorageService {
     }
   }
 
+  /// Save staff QR badge PNG locally on Clinic PC.
+  /// Returns the local file path.
+  Future<String> saveStaffBadgeLocally({
+    required String staffId,
+    required String staffName,
+    required Uint8List bytes,
+  }) async {
+    if (kIsWeb) {
+      return 'data:image/png;base64,${base64Encode(bytes)}';
+    }
+
+    try {
+      final base = await baseDirectory;
+      final badgesDir = Directory('${base.path}/staff_badges');
+      if (!await badgesDir.exists()) {
+        await badgesDir.create(recursive: true);
+      }
+      final cleanName = staffName.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+      final file = File('${badgesDir.path}/badge_${cleanName}_$staffId.png');
+      await file.writeAsBytes(bytes, flush: true);
+      return file.path;
+    } catch (e) {
+      debugPrint('Error saving staff badge locally: $e');
+      return '';
+    }
+  }
+
   /// Get storage usage statistics on Clinic PC
   Future<Map<String, dynamic>> getStorageUsage() async {
     if (kIsWeb) {

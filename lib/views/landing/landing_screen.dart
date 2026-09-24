@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../shared/widgets/olof_logo.dart';
 import '../../providers/theme_provider.dart';
+import 'widgets/mobile_kiosk_scanner.dart';
 
 /// Landing screen — Adaptive Station Selector
 /// - Desktop (Windows/macOS/Linux): Unlocks the TV Queue Display (from Web)
@@ -228,7 +229,12 @@ class _LandingScreenState extends State<LandingScreen>
   ) {
     return Column(
       children: [
-        // Featured Admin Desktop Workstation Card
+        // Staff QR Code Login Hero Card
+        _buildQrLoginHeroCard(context, isDark: isDark),
+
+        const SizedBox(height: 18),
+
+        // Featured Admin Desktop Workstation Card (QR / PIN Protected)
         _buildFeaturedAdminCard(context, isDark: isDark),
 
         const SizedBox(height: 18),
@@ -259,7 +265,7 @@ class _LandingScreenState extends State<LandingScreen>
         ),
         const SizedBox(height: 12),
 
-        // Featured TV Display Card (Unlocked)
+        // Featured TV Display Card (Unlocked for Waiting Area)
         _buildFeaturedTvDisplayCard(context, isDark: isDark),
 
         const SizedBox(height: 24),
@@ -269,13 +275,13 @@ class _LandingScreenState extends State<LandingScreen>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(
-              Icons.domain_verification_rounded,
-              size: 15,
+              Icons.qr_code_2_rounded,
+              size: 16,
               color: Color(0xFF0D9488),
             ),
             const SizedBox(width: 6),
             Text(
-              'CLINICAL & STAFF WORKSTATIONS',
+              'CLINICAL & STAFF WORKSTATIONS (QR AUTHENTICATED)',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w900,
@@ -303,7 +309,8 @@ class _LandingScreenState extends State<LandingScreen>
                   gradient: const LinearGradient(
                     colors: [Color(0xFF059669), Color(0xFF047857)],
                   ),
-                  route: '/doctor',
+                  route: '/auth/qr-login?role=Doctor',
+                  badgeText: 'QR SCAN',
                 ),
               ),
               const SizedBox(width: 16),
@@ -317,7 +324,8 @@ class _LandingScreenState extends State<LandingScreen>
                   gradient: const LinearGradient(
                     colors: [Color(0xFFEC4899), Color(0xFFBE185D)],
                   ),
-                  route: '/nurse',
+                  route: '/auth/qr-login?role=Nurse',
+                  badgeText: 'QR SCAN',
                 ),
               ),
               const SizedBox(width: 16),
@@ -329,7 +337,8 @@ class _LandingScreenState extends State<LandingScreen>
                   title: 'Receptionist',
                   subtitle: 'Register patients, scan QR & issue tickets',
                   gradient: AppColors.primaryGradient,
-                  route: '/receptionist',
+                  route: '/auth/qr-login?role=Receptionist',
+                  badgeText: 'QR SCAN',
                 ),
               ),
               const SizedBox(width: 16),
@@ -343,7 +352,8 @@ class _LandingScreenState extends State<LandingScreen>
                   gradient: const LinearGradient(
                     colors: [AppColors.cyanCalm, Color(0xFF0F766E)],
                   ),
-                  route: '/secretary',
+                  route: '/auth/qr-login?role=Ophtha',
+                  badgeText: 'QR SCAN',
                 ),
               ),
             ],
@@ -360,7 +370,8 @@ class _LandingScreenState extends State<LandingScreen>
                 gradient: const LinearGradient(
                   colors: [Color(0xFF059669), Color(0xFF047857)],
                 ),
-                route: '/doctor',
+                route: '/auth/qr-login?role=Doctor',
+                badgeText: 'QR SCAN',
               ),
               const SizedBox(height: 12),
               _buildRoleCard(
@@ -372,7 +383,8 @@ class _LandingScreenState extends State<LandingScreen>
                 gradient: const LinearGradient(
                   colors: [Color(0xFFEC4899), Color(0xFFBE185D)],
                 ),
-                route: '/nurse',
+                route: '/auth/qr-login?role=Nurse',
+                badgeText: 'QR SCAN',
               ),
               const SizedBox(height: 12),
               _buildRoleCard(
@@ -382,7 +394,8 @@ class _LandingScreenState extends State<LandingScreen>
                 title: 'Receptionist',
                 subtitle: 'Register patients, scan QR & issue tickets',
                 gradient: AppColors.primaryGradient,
-                route: '/receptionist',
+                route: '/auth/qr-login?role=Receptionist',
+                badgeText: 'QR SCAN',
               ),
               const SizedBox(height: 12),
               _buildRoleCard(
@@ -394,7 +407,8 @@ class _LandingScreenState extends State<LandingScreen>
                 gradient: const LinearGradient(
                   colors: [AppColors.cyanCalm, Color(0xFF0F766E)],
                 ),
-                route: '/secretary',
+                route: '/auth/qr-login?role=Ophtha',
+                badgeText: 'QR SCAN',
               ),
             ],
           ),
@@ -402,167 +416,136 @@ class _LandingScreenState extends State<LandingScreen>
     );
   }
 
-  /// Mobile & Tablet Station Layout (Exclusive):
+  /// Staff QR Code Login Hero Banner Card
+  Widget _buildQrLoginHeroCard(BuildContext context, {required bool isDark}) {
+    final cardBg = isDark ? AppColors.surfaceMid : AppColors.lightSurface;
+    final borderColor = isDark
+        ? const Color(0xFF059669).withValues(alpha: 0.5)
+        : const Color(0xFF059669).withValues(alpha: 0.35);
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 2),
+        color: cardBg,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF059669).withValues(alpha: isDark ? 0.2 : 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => context.push('/auth/qr-login'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF059669), Color(0xFF047857)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF059669).withValues(alpha: 0.4),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.qr_code_scanner_rounded,
+                      size: 28, color: Colors.white),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Staff QR Code Login',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: isDark
+                                  ? AppColors.textPrimary
+                                  : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF059669)
+                                  .withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'ACCESS GATE',
+                              style: TextStyle(
+                                color: Color(0xFF059669),
+                                fontWeight: FontWeight.w900,
+                                fontSize: 9.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Scan your physical staff QR badge or enter your 4-digit PIN to enter your station.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark
+                              ? AppColors.textSecondary
+                              : AppColors.lightTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  onPressed: () => context.push('/auth/qr-login'),
+                  icon: const Icon(Icons.login_rounded, size: 16),
+                  label: const Text('Scan QR / PIN'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Mobile & Tablet Station Layout (Exclusive Staff Kiosk):
   Widget _buildMobileStations(
     BuildContext context,
     bool isDark,
     bool isWide,
     bool isCompact,
   ) {
-    return Column(
-      children: [
-        // Role Selection Header
-        Text(
-          'SELECT CLINICAL STATION',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w900,
-            color: isDark
-                ? AppColors.textSecondary
-                : AppColors.lightTextSecondary,
-            letterSpacing: 1.5,
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        if (isWide) ...[
-          Row(
-            children: [
-              Expanded(
-                child: _buildRoleCard(
-                  context,
-                  isDark: isDark,
-                  icon: Icons.medical_services_rounded,
-                  title: 'Doctor Station',
-                  subtitle: 'Review nurse drawings, vitals & conduct consultation',
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF059669), Color(0xFF047857)],
-                  ),
-                  route: '/doctor',
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildRoleCard(
-                  context,
-                  isDark: isDark,
-                  icon: Icons.medical_information_rounded,
-                  title: 'Nurse Station',
-                  subtitle: 'Patient triage, vitals & clinical drawings',
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFEC4899), Color(0xFFBE185D)],
-                  ),
-                  route: '/nurse',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _buildRoleCard(
-                  context,
-                  isDark: isDark,
-                  icon: Icons.person_add_rounded,
-                  title: 'Receptionist',
-                  subtitle: 'Register patients, scan QR & issue tickets',
-                  gradient: AppColors.primaryGradient,
-                  route: '/receptionist',
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildRoleCard(
-                  context,
-                  isDark: isDark,
-                  icon: Icons.visibility_rounded,
-                  title: 'Ophtha Dept',
-                  subtitle: 'Ophthalmology queue, call patients & assign rooms',
-                  gradient: const LinearGradient(
-                    colors: [AppColors.cyanCalm, Color(0xFF0F766E)],
-                  ),
-                  route: '/secretary',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _buildRoleCard(
-            context,
-            isDark: isDark,
-            icon: Icons.admin_panel_settings_rounded,
-            title: 'Admin Workstation',
-            subtitle: 'Clinic PC oversight, doctor queues & user management',
-            gradient: const LinearGradient(
-              colors: [Color(0xFF065F46), Color(0xFF0D9488)],
-            ),
-            route: '/admin',
-          ),
-        ] else
-          Column(
-            children: [
-              _buildRoleCard(
-                context,
-                isDark: isDark,
-                icon: Icons.medical_services_rounded,
-                title: 'Doctor Station',
-                subtitle: 'Review nurse drawings, vitals & conduct consultation',
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF059669), Color(0xFF047857)],
-                ),
-                route: '/doctor',
-              ),
-              const SizedBox(height: 14),
-              _buildRoleCard(
-                context,
-                isDark: isDark,
-                icon: Icons.medical_information_rounded,
-                title: 'Nurse Station',
-                subtitle: 'Patient triage, vitals & clinical drawings',
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFEC4899), Color(0xFFBE185D)],
-                ),
-                route: '/nurse',
-              ),
-              const SizedBox(height: 14),
-              _buildRoleCard(
-                context,
-                isDark: isDark,
-                icon: Icons.person_add_rounded,
-                title: 'Receptionist',
-                subtitle: 'Register patients, scan QR & issue tickets',
-                gradient: AppColors.primaryGradient,
-                route: '/receptionist',
-              ),
-              const SizedBox(height: 14),
-              _buildRoleCard(
-                context,
-                isDark: isDark,
-                icon: Icons.visibility_rounded,
-                title: 'Ophtha Dept',
-                subtitle: 'Ophthalmology queue, call patients & assign rooms',
-                gradient: const LinearGradient(
-                  colors: [AppColors.cyanCalm, Color(0xFF0F766E)],
-                ),
-                route: '/secretary',
-              ),
-              const SizedBox(height: 14),
-              _buildRoleCard(
-                context,
-                isDark: isDark,
-                icon: Icons.admin_panel_settings_rounded,
-                title: 'Admin Workstation',
-                subtitle: 'Clinic PC oversight, doctor queues & user management',
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF065F46), Color(0xFF0D9488)],
-                ),
-                route: '/admin',
-              ),
-            ],
-          ),
-      ],
-    );
+    return MobileKioskScanner(isDark: isDark);
   }
 
   /// Featured Admin Desktop Workstation Card (Clinic PC)
@@ -587,7 +570,7 @@ class _LandingScreenState extends State<LandingScreen>
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(22),
-          onTap: () => context.push('/admin'),
+          onTap: () => context.push('/auth/qr-login?role=Admin'),
           child: Padding(
             padding: const EdgeInsets.all(22),
             child: Row(
@@ -616,7 +599,7 @@ class _LandingScreenState extends State<LandingScreen>
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: const Text(
-                              'CLINIC PC',
+                              'QR / PIN AUTH',
                               style: TextStyle(
                                 color: Color(0xFF0F172A),
                                 fontWeight: FontWeight.bold,
@@ -989,7 +972,7 @@ class _LandingScreenState extends State<LandingScreen>
                     ),
                   ],
                 ),
-                if (isLocked)
+                if (badgeText != null || isLocked)
                   Positioned(
                     top: 0,
                     right: 0,
@@ -1011,11 +994,13 @@ class _LandingScreenState extends State<LandingScreen>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            Icons.lock_rounded,
+                            isLocked
+                                ? Icons.lock_rounded
+                                : Icons.qr_code_2_rounded,
                             size: 11,
-                            color: isDark
-                                ? AppColors.warning
-                                : AppColors.nowServingTextDark,
+                            color: isLocked
+                                ? (isDark ? AppColors.warning : AppColors.nowServingTextDark)
+                                : (isDark ? AppColors.primarySoft : AppColors.primary),
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -1024,9 +1009,9 @@ class _LandingScreenState extends State<LandingScreen>
                               fontSize: 9.5,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 0.5,
-                              color: isDark
-                                  ? AppColors.warning
-                                  : AppColors.nowServingTextDark,
+                              color: isLocked
+                                  ? (isDark ? AppColors.warning : AppColors.nowServingTextDark)
+                                  : (isDark ? AppColors.primarySoft : AppColors.primary),
                             ),
                           ),
                         ],

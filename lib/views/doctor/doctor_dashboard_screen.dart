@@ -1,10 +1,9 @@
-import 'dart:convert';
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/app_image_helper.dart';
 import '../../data/models/queue_entry.dart';
 import '../../data/models/visit_record.dart';
 import '../../data/repositories/patient_repository.dart';
@@ -45,16 +44,8 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   }
 
   ImageProvider _getDoctorImageProvider(String path) {
-    if (path.startsWith('data:image')) {
-      final base64Str = path.split(',').last;
-      return MemoryImage(base64Decode(base64Str));
-    }
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      return NetworkImage(path);
-    }
-    if (!kIsWeb) {
-      return FileImage(File(path));
-    }
+    final provider = AppImageHelper.buildImageProvider(path);
+    if (provider != null) return provider;
     return NetworkImage(path);
   }
 
@@ -398,14 +389,33 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            entry.patientName,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Purpose: ${entry.purpose}',
-            style: const TextStyle(fontSize: 13, color: Colors.grey),
+          Row(
+            children: [
+              AppImageHelper.buildAvatar(
+                photoUrl: entry.patientPhoto,
+                name: entry.patientName,
+                radius: 22,
+                backgroundColor: themeColor.withValues(alpha: 0.15),
+                foregroundColor: themeColor,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.patientName,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Purpose: ${entry.purpose}',
+                      style: const TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           SizedBox(
@@ -614,7 +624,15 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                               ],
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
+                          AppImageHelper.buildAvatar(
+                            photoUrl: item.patientPhoto,
+                            name: item.patientName,
+                            radius: 16,
+                            backgroundColor: themeColor.withValues(alpha: 0.12),
+                            foregroundColor: themeColor,
+                          ),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -900,7 +918,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                       ),
                       title: Text(DoctorProvider.formatDoctorName(d.name),
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      subtitle: Text('${d.department} • ${d.room ?? 'Room 1'}'),
+                      subtitle: Text('${d.department} • ${d.room ?? (d.department == AppConstants.deptEyes ? 'OPHTHA ROOM 1' : 'ENT ROOM 1')}'),
                       selected: isSelected,
                       onTap: () {
                         doctorProv.selectDoctorModel(d);

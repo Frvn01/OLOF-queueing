@@ -89,6 +89,32 @@ class Patient {
         'updated_at': updatedAt.toIso8601String(),
       };
 
+  /// Clean JSON payload matching Supabase PostgreSQL `patients` schema.
+  /// Omits client-side only fields (vital_signs) that would trigger PGRST204.
+  Map<String, dynamic> toSupabaseJson() => {
+        'id': id,
+        'patient_no': patientNo,
+        'first_name': firstName,
+        'last_name': lastName,
+        'middle_name': middleName,
+        'birthday': birthday.toIso8601String(),
+        'sex': sex,
+        'civil_status': civilStatus,
+        'address': address,
+        'contact_number': contactNumber,
+        'occupation': occupation,
+        'referred_by': referredBy,
+        'photo_url': photoUrl,
+        'chief_complaint': chiefComplaint,
+        'history_of_present_illness': historyOfPresentIllness,
+        'past_medical_history': pastMedicalHistory,
+        'is_first_time': isFirstTime,
+        'assigned_doctor': assignedDoctor,
+        'assigned_room': assignedRoom,
+        'created_at': createdAt.toIso8601String(),
+        'updated_at': updatedAt.toIso8601String(),
+      };
+
   factory Patient.fromJson(Map<String, dynamic> json) => Patient(
         id: json['id']?.toString() ?? '',
         patientNo: json['patient_no']?.toString() ?? '',

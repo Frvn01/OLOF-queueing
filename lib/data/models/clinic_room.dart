@@ -1,7 +1,7 @@
 /// Clinic room model
 class ClinicRoom {
   final String id;
-  final String name; // e.g. 'Room 1', 'Room 2', 'ENT Examination Room'
+  final String name; // e.g. 'ENT ROOM 1', 'OPHTHA ROOM 1'
   final String department; // 'ENT', 'EYES', or 'BOTH'
   final bool isActive;
   final DateTime createdAt;

@@ -20,14 +20,19 @@ class AppConstants {
 
   // ── DOCTORS (shown on display screen instead of patient name) ─────────────
   static const Map<String, String> departmentDoctors = {
-    deptEnt: 'Dr. Engr. Ranulfo Ramos',
-    deptEyes: 'Dr. Ranulfo Ramos Jr.',
+    deptEnt: 'Dr. DR. LORENZO VERA CRUZ',
+    deptEyes: 'Dr. DR. IAN J. DAGUMAN',
   };
 
-  // ── ROOMS (configurable) ──────────────────────────────
+  // ── ROOMS (matching Supabase clinic_rooms) ──────────────
   static const Map<String, List<String>> rooms = {
-    deptEnt: ['Room 1', 'Room 2', 'Room 3'],
-    deptEyes: ['Room 1', 'Room 2', 'Room 3'],
+    deptEnt: ['ENT ROOM 1', 'ENT ROOM 2'],
+    deptEyes: [
+      'OPHTHA ROOM 1',
+      'OPHTHA ROOM 2',
+      'OPHTHA ROOM 3',
+      'OPHTHA ROOM 4'
+    ],
   };
 
   // ── QUEUE NUMBER FORMAT ───────────────────────────────

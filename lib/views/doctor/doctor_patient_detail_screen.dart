@@ -1,7 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/app_image_helper.dart';
+import '../../data/models/clinical_examination.dart';
 import '../../data/models/patient.dart';
 import '../../data/models/visit_record.dart';
 import '../../data/repositories/examination_repository.dart';
@@ -187,18 +188,12 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen>
                   padding: const EdgeInsets.all(20),
                   child: Row(
                     children: [
-                      CircleAvatar(
+                      AppImageHelper.buildAvatar(
+                        photoUrl: p.photoUrl,
+                        name: p.fullName,
                         radius: 36,
                         backgroundColor: themeColor.withValues(alpha: 0.15),
-                        child: Text(
-                          (p.firstName.isNotEmpty ? p.firstName[0] : '') +
-                              (p.lastName.isNotEmpty ? p.lastName[0] : ''),
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: themeColor,
-                          ),
-                        ),
+                        foregroundColor: themeColor,
                       ),
                       const SizedBox(width: 20),
                       Expanded(
@@ -223,7 +218,7 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen>
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Assigned to: ${p.assignedDoctor ?? 'Doctor Consultation'} • Room: ${p.assignedRoom ?? 'Room 1'}',
+                              'Assigned to: ${p.assignedDoctor ?? 'Doctor Consultation'}${p.assignedRoom != null && p.assignedRoom!.isNotEmpty ? ' • Room: ${p.assignedRoom}' : ''}',
                               style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                             ),
                           ],
@@ -349,10 +344,16 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen>
       itemCount: _exams.length,
       itemBuilder: (context, i) {
         final exam = _exams[i];
-        final views = (exam['views'] as List?) ?? [];
+        final rawItems = exam['items'];
+        final List<ClinicalExamination> items = rawItems is List
+            ? rawItems.whereType<ClinicalExamination>().toList()
+            : [];
+        final rawViews = (exam['views'] as List?) ?? [];
         final examType = exam['exam_type']?.toString().toUpperCase() ?? 'EXAM';
         final examiner = exam['examiner_name']?.toString() ?? 'Triage Nurse';
-        final notes = exam['notes']?.toString() ?? '';
+        final notes = exam['clinical_findings']?.toString() ??
+            exam['notes']?.toString() ??
+            '';
         final symptoms = exam['symptoms']?.toString() ?? '';
         final cause = exam['cause']?.toString() ?? '';
 
@@ -419,47 +420,87 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen>
                 const Text('Clinical Drawings & Views:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 const SizedBox(height: 8),
 
-                // Diagram images grid
+                // Diagram images grid (supporting both items and views)
                 Wrap(
                   spacing: 12,
                   runSpacing: 12,
-                  children: views.map<Widget>((v) {
-                    final viewName = v['view_name']?.toString() ?? 'View';
-                    final imgData = v['image_data']?.toString() ?? '';
+                  children: [
+                    ...items.map<Widget>((item) {
+                      final viewName = 'View ${item.viewName}';
+                      final imgUrl = item.imageUrl ?? '';
 
-                    return InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () => _showDiagramModal(context, viewName, imgData),
-                      child: Container(
-                        width: 180,
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
-                        ),
-                        child: Column(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                height: 110,
-                                width: double.infinity,
-                                color: Colors.grey.shade100,
-                                child: _buildDiagramImage(imgData),
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => _showDiagramModal(context, '$examType ($viewName)', imgUrl),
+                        child: Container(
+                          width: 180,
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                          ),
+                          child: Column(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  height: 110,
+                                  width: double.infinity,
+                                  color: Colors.grey.shade100,
+                                  child: AppImageHelper.buildDiagramImage(imgUrl),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              viewName,
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                              const SizedBox(height: 6),
+                              Text(
+                                viewName,
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    );
-                  }).toList(),
+                      );
+                    }),
+                    if (items.isEmpty)
+                      ...rawViews.map<Widget>((v) {
+                        final viewName = v['view_name']?.toString() ?? 'View';
+                        final imgData = v['image_data']?.toString() ?? '';
+
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => _showDiagramModal(context, viewName, imgData),
+                          child: Container(
+                            width: 180,
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                            ),
+                            child: Column(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    height: 110,
+                                    width: double.infinity,
+                                    color: Colors.grey.shade100,
+                                    child: AppImageHelper.buildDiagramImage(imgData),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  viewName,
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                  ],
                 ),
               ],
             ),
@@ -687,18 +728,7 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen>
   }
 
   Widget _buildDiagramImage(String data) {
-    if (data.startsWith('data:image')) {
-      try {
-        final base64Str = data.split(',').last;
-        return Image.memory(base64Decode(base64Str), fit: BoxFit.contain);
-      } catch (_) {
-        return const Center(child: Icon(Icons.broken_image));
-      }
-    }
-    if (data.startsWith('http')) {
-      return Image.network(data, fit: BoxFit.contain);
-    }
-    return const Center(child: Icon(Icons.draw));
+    return AppImageHelper.buildDiagramImage(data);
   }
 
   void _showDiagramModal(BuildContext context, String title, String data) {

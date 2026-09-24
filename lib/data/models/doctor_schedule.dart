@@ -20,7 +20,7 @@ class DaySchedule {
     this.breakEnd = '13:00',
     this.slotDurationMinutes = 30,
     this.maxPatientsPerSlot = 1,
-    this.location = 'Room 1',
+    this.location = 'ENT ROOM 1',
     this.notes = '',
   });
 
@@ -44,7 +44,7 @@ class DaySchedule {
         breakEnd: json['break_end'] as String? ?? '13:00',
         slotDurationMinutes: json['slot_duration_minutes'] as int? ?? 30,
         maxPatientsPerSlot: json['max_patients_per_slot'] as int? ?? 1,
-        location: json['location'] as String? ?? 'Room 1',
+        location: json['location'] as String? ?? 'ENT ROOM 1',
         notes: json['notes'] as String? ?? '',
       );
 
@@ -108,7 +108,7 @@ class DoctorSchedule {
   factory DoctorSchedule.defaultSchedule({
     required String doctorId,
     required String doctorName,
-    String room = 'Room 1',
+    String room = 'ENT ROOM 1',
   }) {
     final map = <String, DaySchedule>{};
     for (final day in dayKeys) {

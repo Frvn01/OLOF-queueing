@@ -30,24 +30,74 @@ class ClinicProvider extends ChangeNotifier {
       Doctor(
         id: 'doc-ent-default',
         name: AppConstants.departmentDoctors[AppConstants.deptEnt] ??
-            'Dr. Engr. Ranulfo Ramos',
+            'Dr. DR. LORENZO VERA CRUZ',
         department: AppConstants.deptEnt,
-        room: 'Room 1',
+        room: 'ENT ROOM 1',
       ),
       Doctor(
-        id: 'doc-eyes-default',
-        name: AppConstants.departmentDoctors[AppConstants.deptEyes] ??
-            'Dr. Ranulfo Ramos Jr.',
+        id: 'doc-ent-2-default',
+        name: 'Dr. DR. JOSHUA PEREZ',
+        department: AppConstants.deptEnt,
+        room: 'ENT ROOM 2',
+      ),
+      Doctor(
+        id: 'doc-eyes-1-default',
+        name: 'Dr. DR. IAN J. DAGUMAN',
         department: AppConstants.deptEyes,
-        room: 'Room 2',
+        room: 'OPHTHA ROOM 1',
+      ),
+      Doctor(
+        id: 'doc-eyes-2-default',
+        name: 'Dr. DR. AMELIA REYES VERA CRUZ',
+        department: AppConstants.deptEyes,
+        room: 'OPHTHA ROOM 2',
+      ),
+      Doctor(
+        id: 'doc-eyes-3-default',
+        name: 'Dr. DR. ANTHONY ROBERT PATRICK LIM',
+        department: AppConstants.deptEyes,
+        room: 'OPHTHA ROOM 3',
+      ),
+      Doctor(
+        id: 'doc-eyes-3b-default',
+        name: 'Dr. DR. ROEL VILLANUEVA',
+        department: AppConstants.deptEyes,
+        room: 'OPHTHA ROOM 3',
+      ),
+      Doctor(
+        id: 'doc-eyes-4-default',
+        name: 'Dr. DR. CLEMENS LEE SABITSANA',
+        department: AppConstants.deptEyes,
+        room: 'OPHTHA ROOM 4',
+      ),
+      Doctor(
+        id: 'doc-eyes-4b-default',
+        name: 'Dr. DR. FRANCIS MARIE LINGAD',
+        department: AppConstants.deptEyes,
+        room: 'OPHTHA ROOM 4',
+      ),
+      Doctor(
+        id: 'doc-eyes-4c-default',
+        name: 'Dr. DR. MARGARITA JUSTINE BONDOC',
+        department: AppConstants.deptEyes,
+        room: 'OPHTHA ROOM 4',
+      ),
+      Doctor(
+        id: 'doc-eyes-4d-default',
+        name: 'Dr. DR. ARAMIS B TORREFRANCA',
+        department: AppConstants.deptEyes,
+        room: 'OPHTHA ROOM 4',
       ),
     ]);
 
-    // Load initial default rooms from AppConstants
+    // Load initial default rooms matching Supabase clinic_rooms
     _rooms.addAll([
-      ClinicRoom(id: 'room-1', name: 'Room 1', department: 'BOTH'),
-      ClinicRoom(id: 'room-2', name: 'Room 2', department: 'BOTH'),
-      ClinicRoom(id: 'room-3', name: 'Room 3', department: 'BOTH'),
+      ClinicRoom(id: 'room-ent-1', name: 'ENT ROOM 1', department: AppConstants.deptEnt),
+      ClinicRoom(id: 'room-ent-2', name: 'ENT ROOM 2', department: AppConstants.deptEnt),
+      ClinicRoom(id: 'room-ophtha-1', name: 'OPHTHA ROOM 1', department: AppConstants.deptEyes),
+      ClinicRoom(id: 'room-ophtha-2', name: 'OPHTHA ROOM 2', department: AppConstants.deptEyes),
+      ClinicRoom(id: 'room-ophtha-3', name: 'OPHTHA ROOM 3', department: AppConstants.deptEyes),
+      ClinicRoom(id: 'room-ophtha-4', name: 'OPHTHA ROOM 4', department: AppConstants.deptEyes),
     ]);
 
     _initialized = true;

@@ -50,19 +50,28 @@ class QueueRepository {
       try {
         await SupabaseService.client
             .from('queue_entries')
-            .insert(entry.toJson());
+            .insert(entry.toSupabaseJson());
       } catch (e) {
         debugPrint('Supabase queue insert error: $e');
-        if (e.toString().contains('assigned_doctor')) {
-          try {
-            final fallback = Map<String, dynamic>.from(entry.toJson())
-              ..remove('assigned_doctor');
-            await SupabaseService.client
-                .from('queue_entries')
-                .insert(fallback);
-          } catch (e2) {
-            debugPrint('Supabase queue fallback insert error: $e2');
+        // Resilient fallback: strip any unsupported columns dynamically
+        try {
+          final payload = Map<String, dynamic>.from(entry.toSupabaseJson());
+          final errStr = e.toString();
+          final match = RegExp(r"Could not find the '([^']+)' column").firstMatch(errStr);
+          if (match != null) {
+            payload.remove(match.group(1));
           }
+          if (errStr.contains('assigned_doctor')) {
+            payload.remove('assigned_doctor');
+          }
+          if (errStr.contains('assigned_room')) {
+            payload.remove('assigned_room');
+          }
+          await SupabaseService.client
+              .from('queue_entries')
+              .insert(payload);
+        } catch (e2) {
+          debugPrint('Supabase queue fallback insert error: $e2');
         }
       }
     }
@@ -84,21 +93,29 @@ class QueueRepository {
       try {
         await SupabaseService.client
             .from('queue_entries')
-            .update(entry.toJson())
+            .update(entry.toSupabaseJson())
             .eq('id', entry.id);
       } catch (e) {
         debugPrint('Supabase queue update error: $e');
-        if (e.toString().contains('assigned_doctor')) {
-          try {
-            final fallback = Map<String, dynamic>.from(entry.toJson())
-              ..remove('assigned_doctor');
-            await SupabaseService.client
-                .from('queue_entries')
-                .update(fallback)
-                .eq('id', entry.id);
-          } catch (e2) {
-            debugPrint('Supabase queue fallback update error: $e2');
+        try {
+          final payload = Map<String, dynamic>.from(entry.toSupabaseJson());
+          final errStr = e.toString();
+          final match = RegExp(r"Could not find the '([^']+)' column").firstMatch(errStr);
+          if (match != null) {
+            payload.remove(match.group(1));
           }
+          if (errStr.contains('assigned_doctor')) {
+            payload.remove('assigned_doctor');
+          }
+          if (errStr.contains('assigned_room')) {
+            payload.remove('assigned_room');
+          }
+          await SupabaseService.client
+              .from('queue_entries')
+              .update(payload)
+              .eq('id', entry.id);
+        } catch (e2) {
+          debugPrint('Supabase queue fallback update error: $e2');
         }
       }
     }

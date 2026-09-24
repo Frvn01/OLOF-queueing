@@ -60,6 +60,25 @@ class QueueEntry {
         'source': source,
       };
 
+  /// Clean JSON payload matching Supabase PostgreSQL `queue_entries` schema exactly.
+  /// Prevents PGRST204 schema cache errors on unsupported columns.
+  Map<String, dynamic> toSupabaseJson() => {
+        'id': id,
+        'patient_id': patientId,
+        'patient_name': patientName,
+        if (patientPhoto != null) 'patient_photo': patientPhoto,
+        'department': department,
+        'queue_number': queueNumber,
+        'purpose': purpose,
+        'status': status,
+        if (assignedRoom != null) 'assigned_room': assignedRoom,
+        if (assignedDoctor != null) 'assigned_doctor': assignedDoctor,
+        'date_key': dateKey,
+        'created_at': createdAt.toIso8601String(),
+        if (calledAt != null) 'called_at': calledAt!.toIso8601String(),
+        if (completedAt != null) 'completed_at': completedAt!.toIso8601String(),
+      };
+
   factory QueueEntry.fromJson(Map<String, dynamic> json) => QueueEntry(
         id: json['id']?.toString() ?? '',
         patientId: json['patient_id']?.toString() ?? '',

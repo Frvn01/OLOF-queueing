@@ -1,10 +1,9 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/app_image_helper.dart';
 import '../../data/models/clinical_examination.dart';
 import '../../data/models/patient.dart';
 import '../../data/models/queue_entry.dart';
@@ -221,10 +220,12 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
           children: [
             Row(
               children: [
-                CircleAvatar(
+                AppImageHelper.buildAvatar(
+                  photoUrl: patient.photoUrl,
+                  name: patient.fullName,
                   radius: 22,
                   backgroundColor: themeColor.withValues(alpha: 0.15),
-                  child: Icon(Icons.person, color: themeColor, size: 24),
+                  foregroundColor: themeColor,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -634,29 +635,12 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
   }
 
   Widget _buildDiagramImage(String? imageUrl) {
-    if (imageUrl == null || imageUrl.isEmpty) {
-      return const Center(child: Icon(Icons.draw_rounded, color: Colors.grey, size: 36));
-    }
-    if (imageUrl.startsWith('data:image')) {
-      try {
-        final commaIdx = imageUrl.indexOf(',');
-        if (commaIdx != -1) {
-          final base64Str = imageUrl.substring(commaIdx + 1);
-          final bytes = base64Decode(base64Str);
-          return Image.memory(bytes, fit: BoxFit.contain, width: double.infinity, height: double.infinity);
-        }
-      } catch (_) {}
-    }
-    if (imageUrl.startsWith('/') || imageUrl.contains(':\\') || imageUrl.contains(':/')) {
-      final file = File(imageUrl);
-      if (file.existsSync()) {
-        return Image.file(file, fit: BoxFit.contain, width: double.infinity, height: double.infinity);
-      }
-    }
-    if (imageUrl.startsWith('http')) {
-      return Image.network(imageUrl, fit: BoxFit.contain, width: double.infinity, height: double.infinity);
-    }
-    return const Center(child: Icon(Icons.image_not_supported_rounded, color: Colors.grey));
+    return AppImageHelper.buildDiagramImage(
+      imageUrl,
+      fit: BoxFit.contain,
+      width: double.infinity,
+      height: double.infinity,
+    );
   }
 
   void _showDiagramLightbox(BuildContext context, ClinicalExamination exam) {

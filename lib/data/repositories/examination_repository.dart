@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:storage_client/storage_client.dart';
 import '../models/clinical_examination.dart';
 import '../services/supabase_service.dart';
 import '../services/local_storage_service.dart';
@@ -128,6 +129,10 @@ class ExaminationRepository {
           .uploadBinary(
             storagePath,
             bytes,
+            fileOptions: const FileOptions(
+              upsert: true,
+              contentType: 'image/png',
+            ),
           );
 
       final publicUrl = SupabaseService.client.storage
@@ -135,9 +140,9 @@ class ExaminationRepository {
           .getPublicUrl(storagePath);
       return publicUrl;
     } catch (e) {
-      debugPrint('Supabase storage upload error (using local storage fallback): $e');
-      // If bucket does not exist, exceeds quota or upload fails, fallback to local path or base64
-      return localPath ?? 'data:image/png;base64,${base64Encode(bytes)}';
+      debugPrint('Supabase storage upload error (using data URI fallback): $e');
+      // If bucket does not exist, exceeds quota or upload fails, fallback to inline base64 so all clients can display it
+      return 'data:image/png;base64,${base64Encode(bytes)}';
     }
   }
 
@@ -150,6 +155,17 @@ class ExaminationRepository {
             .upsert(exam.toJson());
       } catch (e) {
         debugPrint('Supabase save examination error: $e');
+        if (e.toString().contains('queue_entry_id') || e.toString().contains('23503')) {
+          try {
+            final fallback = Map<String, dynamic>.from(exam.toJson())
+              ..remove('queue_entry_id');
+            await SupabaseService.client
+                .from('clinical_examinations')
+                .upsert(fallback);
+          } catch (e2) {
+            debugPrint('Supabase fallback save examination error: $e2');
+          }
+        }
       }
     }
     // Update local cache
@@ -173,13 +189,24 @@ class ExaminationRepository {
             .upsert(rows);
       } catch (e) {
         debugPrint('Supabase batch save error: $e');
-        // If batch fails, try one by one
+        final isFkErr = e.toString().contains('queue_entry_id') || e.toString().contains('23503');
+        // If batch fails, try one by one (stripping queue_entry_id if FK failed)
         for (final exam in exams) {
           try {
+            final payload = Map<String, dynamic>.from(exam.toJson());
+            if (isFkErr) payload.remove('queue_entry_id');
             await SupabaseService.client
                 .from('clinical_examinations')
-                .upsert(exam.toJson());
-          } catch (_) {}
+                .upsert(payload);
+          } catch (_) {
+            try {
+              final stripped = Map<String, dynamic>.from(exam.toJson())
+                ..remove('queue_entry_id');
+              await SupabaseService.client
+                  .from('clinical_examinations')
+                  .upsert(stripped);
+            } catch (_) {}
+          }
         }
       }
     }

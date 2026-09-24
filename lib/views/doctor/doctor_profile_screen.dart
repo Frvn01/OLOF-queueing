@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import '../../core/constants/app_constants.dart';
 import '../../providers/clinic_provider.dart';
 import '../../providers/doctor_provider.dart';
 import '../../providers/queue_provider.dart';
@@ -608,7 +609,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                       ),
                       title: Text(_formatDoctorDisplayName(d.name),
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      subtitle: Text('${d.department} • ${d.room ?? 'Room 1'}'),
+                      subtitle: Text('${d.department} • ${d.room ?? (d.department == AppConstants.deptEyes ? 'OPHTHA ROOM 1' : 'ENT ROOM 1')}'),
                       trailing: isSelected
                           ? const Icon(Icons.check_circle_rounded, color: color)
                           : null,

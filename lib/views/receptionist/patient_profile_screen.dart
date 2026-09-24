@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/app_image_helper.dart';
 import '../../core/utils/helpers.dart';
 import '../../providers/patient_provider.dart';
 import '../../data/models/patient.dart';
@@ -116,9 +117,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   radius: 20,
                   backgroundColor:
                       isDark ? AppColors.surfaceLight : AppColors.lightSurfaceMid,
-                  backgroundImage: patient.photoUrl != null && patient.photoUrl!.isNotEmpty
-                      ? NetworkImage(patient.photoUrl!)
-                      : null,
+                  backgroundImage: AppImageHelper.buildImageProvider(patient.photoUrl),
                   child: patient.photoUrl == null || patient.photoUrl!.isEmpty
                       ? Icon(Icons.person_rounded, size: 22, color: subtitleColor)
                       : null,
@@ -288,9 +287,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                         color: AppColors.primary.withValues(alpha: 0.4),
                         width: 2.5,
                       ),
-                      image: patient.photoUrl != null && patient.photoUrl!.isNotEmpty
+                      image: AppImageHelper.buildImageProvider(patient.photoUrl) != null
                           ? DecorationImage(
-                              image: NetworkImage(patient.photoUrl!),
+                              image: AppImageHelper.buildImageProvider(patient.photoUrl)!,
                               fit: BoxFit.cover,
                             )
                           : null,

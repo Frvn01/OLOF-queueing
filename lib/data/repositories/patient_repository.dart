@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:storage_client/storage_client.dart';
 import '../models/patient.dart';
@@ -60,21 +61,26 @@ class PatientRepository {
       try {
         await SupabaseService.client
             .from('patients')
-            .insert(patient.toJson());
+            .insert(patient.toSupabaseJson());
       } catch (e) {
         debugPrint('Supabase insert error: $e');
-        if (e.toString().contains('assigned_doctor') ||
-            e.toString().contains('assigned_room') ||
-            e.toString().contains('is_first_time')) {
-          try {
-            final fallback = Map<String, dynamic>.from(patient.toJson())
-              ..remove('is_first_time')
-              ..remove('assigned_doctor')
-              ..remove('assigned_room');
-            await SupabaseService.client.from('patients').insert(fallback);
-          } catch (e2) {
-            debugPrint('Supabase fallback insert error: $e2');
+        try {
+          final fallback = Map<String, dynamic>.from(patient.toSupabaseJson());
+          final errStr = e.toString();
+          final match = RegExp(r"Could not find the '([^']+)' column").firstMatch(errStr);
+          if (match != null) {
+            fallback.remove(match.group(1));
           }
+          fallback.remove('vital_signs');
+          if (errStr.contains('is_first_time')) fallback.remove('is_first_time');
+          if (errStr.contains('assigned_doctor')) fallback.remove('assigned_doctor');
+          if (errStr.contains('assigned_room')) fallback.remove('assigned_room');
+          if (errStr.contains('chief_complaint')) fallback.remove('chief_complaint');
+          if (errStr.contains('history_of_present_illness')) fallback.remove('history_of_present_illness');
+          if (errStr.contains('past_medical_history')) fallback.remove('past_medical_history');
+          await SupabaseService.client.from('patients').insert(fallback);
+        } catch (e2) {
+          debugPrint('Supabase fallback insert error: $e2');
         }
       }
     }
@@ -89,25 +95,27 @@ class PatientRepository {
       try {
         await SupabaseService.client
             .from('patients')
-            .update(patient.toJson())
+            .update(patient.toSupabaseJson())
             .eq('id', patient.id);
       } catch (e) {
         debugPrint('Supabase update error: $e');
-        if (e.toString().contains('assigned_doctor') ||
-            e.toString().contains('assigned_room') ||
-            e.toString().contains('is_first_time')) {
-          try {
-            final fallback = Map<String, dynamic>.from(patient.toJson())
-              ..remove('is_first_time')
-              ..remove('assigned_doctor')
-              ..remove('assigned_room');
-            await SupabaseService.client
-                .from('patients')
-                .update(fallback)
-                .eq('id', patient.id);
-          } catch (e2) {
-            debugPrint('Supabase fallback update error: $e2');
+        try {
+          final fallback = Map<String, dynamic>.from(patient.toSupabaseJson());
+          final errStr = e.toString();
+          final match = RegExp(r"Could not find the '([^']+)' column").firstMatch(errStr);
+          if (match != null) {
+            fallback.remove(match.group(1));
           }
+          fallback.remove('vital_signs');
+          if (errStr.contains('is_first_time')) fallback.remove('is_first_time');
+          if (errStr.contains('assigned_doctor')) fallback.remove('assigned_doctor');
+          if (errStr.contains('assigned_room')) fallback.remove('assigned_room');
+          await SupabaseService.client
+              .from('patients')
+              .update(fallback)
+              .eq('id', patient.id);
+        } catch (e2) {
+          debugPrint('Supabase fallback update error: $e2');
         }
       }
     }
@@ -190,9 +198,8 @@ class PatientRepository {
   /// Under Option A, saves a local copy on Clinic PC disk to prevent storage quota overflow.
   Future<String?> uploadPhoto(String patientId, Uint8List bytes, String fileName) async {
     final ext = fileName.split('.').last.toLowerCase();
-    String? localPath;
     try {
-      localPath = await LocalStorageService.instance.savePhotoLocally(
+      await LocalStorageService.instance.savePhotoLocally(
         patientId: patientId,
         bytes: bytes,
         ext: ext,
@@ -201,7 +208,9 @@ class PatientRepository {
       debugPrint('Local photo save note: $e');
     }
 
-    if (!isSupabase) return localPath;
+    final dataUri = 'data:image/$ext;base64,${base64Encode(bytes)}';
+
+    if (!isSupabase) return dataUri;
 
     try {
       final path = 'patients/$patientId/profile.$ext';
@@ -220,8 +229,8 @@ class PatientRepository {
           .getPublicUrl(path);
       return url;
     } catch (e) {
-      debugPrint('Photo upload error (using local storage fallback): $e');
-      return localPath;
+      debugPrint('Photo upload error (using data URI fallback): $e');
+      return dataUri;
     }
   }
 
