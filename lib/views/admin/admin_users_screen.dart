@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -67,7 +66,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           department: doc.department,
           assignedRoom: doc.room ?? defaultRoom,
           qrSecret: 'olof-doc-${doc.id}',
-          pin4: '3333',
+          pin4: '',
         );
         unifiedList.add({
           'id': doc.id,
@@ -99,7 +98,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                   ),
                   Text(
-                    'Manage active staff, QR cards, 4-digit PINs, and station roles.',
+                    'Manage active staff, QR cards, and station roles.',
                     style: TextStyle(
                       fontSize: 12,
                       color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary,
@@ -228,36 +227,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                   ),
                                 ),
                               ),
-                              if (rawStaff != null && rawStaff.pin4.isNotEmpty) ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: AppColors.primary.withValues(alpha: 0.3),
-                                    ),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.lock_rounded, size: 10, color: AppColors.primary),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'PIN SET',
-                                        style: TextStyle(
-                                          color: AppColors.primary,
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 10,
-                                          letterSpacing: 0.8,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-
                             ],
                           ),
                           subtitle: Text(
@@ -409,9 +378,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
   void _showAddEditStaffDialog(BuildContext context, StaffUser? existing) {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
-    final pinCtrl = TextEditingController(
-      text: existing?.pin4 ?? (1000 + Random().nextInt(9000)).toString(),
-    );
     String role = existing?.role ?? 'nurse';
     String dept = existing?.department ?? 'ALL';
     String room = existing?.assignedRoom ?? 'Clinical Kiosk';
@@ -495,18 +461,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     if (val != null) setState(() => room = val);
                   },
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: pinCtrl,
-                  keyboardType: TextInputType.number,
-                  maxLength: 4,
-                  decoration: const InputDecoration(
-                    labelText: '4-Digit Login PIN',
-                    hintText: 'e.g. 1234',
-                    counterText: '',
-                    helperText: 'Used as fallback on Windows desktop when camera is unavailable',
-                  ),
-                ),
               ],
             ),
           ),
@@ -519,7 +473,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               onPressed: () {
                 if (nameCtrl.text.trim().isEmpty) return;
                 final adminProv = context.read<AdminProvider>();
-                final pin = pinCtrl.text.trim().isEmpty ? '0000' : pinCtrl.text.trim();
                 final StaffUser savedStaff;
                 if (existing == null) {
                   savedStaff = StaffUser(
@@ -531,7 +484,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     qrSecret: role == 'super_admin'
                         ? 'olof-super-admin-master-key-2026'
                         : const Uuid().v4(),
-                    pin4: pin,
+                    pin4: '',
                   );
                   adminProv.addStaff(savedStaff);
                 } else {
@@ -540,7 +493,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     role: role,
                     department: dept,
                     assignedRoom: room,
-                    pin4: pin,
+                    pin4: '',
                   );
                   adminProv.updateStaff(savedStaff);
                 }

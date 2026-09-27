@@ -30,7 +30,7 @@ class StaffUser {
     this.assignedRoom,
     this.isActive = true,
     required this.qrSecret,
-    required this.pin4,
+    this.pin4 = '',
   });
 
   StaffUser copyWith({
@@ -98,7 +98,6 @@ List<StaffUser> _defaultStaff() {
       department: 'ALL',
       assignedRoom: 'All Stations (Master Key)',
       qrSecret: 'olof-super-admin-master-key-2026',
-      pin4: '7777',
     ),
     const StaffUser(
       id: 'rec-1',
@@ -107,7 +106,6 @@ List<StaffUser> _defaultStaff() {
       department: 'ALL',
       assignedRoom: 'Triage / Front Desk',
       qrSecret: 'olof-reception-desk-2026',
-      pin4: '2222',
     ),
     const StaffUser(
       id: 'nurse-1',
@@ -116,7 +114,6 @@ List<StaffUser> _defaultStaff() {
       department: 'ALL',
       assignedRoom: 'Clinical Kiosk',
       qrSecret: 'olof-nurse-station-2026',
-      pin4: '1111',
     ),
     const StaffUser(
       id: 'doc-ent-1',
@@ -125,7 +122,6 @@ List<StaffUser> _defaultStaff() {
       department: 'ENT',
       assignedRoom: 'ENT ROOM 1',
       qrSecret: 'olof-doc-ent-vera-cruz-2026',
-      pin4: '3333',
     ),
     const StaffUser(
       id: 'doc-eye-1',
@@ -134,7 +130,6 @@ List<StaffUser> _defaultStaff() {
       department: 'EYES',
       assignedRoom: 'OPHTHA ROOM 1',
       qrSecret: 'olof-doc-eye-daguman-2026',
-      pin4: '4444',
     ),
     const StaffUser(
       id: 'ophtha-1',
@@ -143,7 +138,6 @@ List<StaffUser> _defaultStaff() {
       department: 'EYES',
       assignedRoom: 'Ophtha Clinic',
       qrSecret: 'olof-ophtha-station-2026',
-      pin4: '5555',
     ),
     const StaffUser(
       id: 'admin-1',
@@ -152,7 +146,6 @@ List<StaffUser> _defaultStaff() {
       department: 'ALL',
       assignedRoom: 'Admin PC',
       qrSecret: 'olof-admin-pc-2026',
-      pin4: '9999',
     ),
   ];
 }
@@ -380,29 +373,11 @@ class AdminProvider extends ChangeNotifier {
             department: dept,
             assignedRoom: assigned,
             qrSecret: secret ?? 'olof-$role-$id',
-            pin4: data['pin']?.toString() ?? '0000',
+            pin4: '',
           );
         }
       }
       return null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Resolve a staff member by 4-digit PIN (Windows fallback).
-  StaffUser? resolvePin(String pin) {
-    if (pin == '7777' || pin == '0000') {
-      return _staffList.firstWhere(
-        (s) => s.role == 'super_admin' || s.id == 'super-admin-1',
-        orElse: () => _defaultStaff().firstWhere((s) => s.id == 'super-admin-1'),
-      );
-    }
-    try {
-      return _staffList.firstWhere(
-        (s) => s.pin4 == pin && s.isActive,
-        orElse: () => throw StateError('not found'),
-      );
     } catch (_) {
       return null;
     }

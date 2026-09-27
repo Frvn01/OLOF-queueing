@@ -160,7 +160,7 @@ class _StaffQrBadgeDialogWidgetState extends State<_StaffQrBadgeDialogWidget> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Employee: ${widget.staff.name}\nRole: ${_formatRole(widget.staff.role)}\nStation: ${widget.staff.assignedRoom ?? "General"}\nPIN: ${widget.staff.pin4}',
+              'Employee: ${widget.staff.name}\nRole: ${_formatRole(widget.staff.role)}\nStation: ${widget.staff.assignedRoom ?? "General"}',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, height: 1.4),
             ),
             const SizedBox(height: 14),
@@ -368,32 +368,6 @@ class _StaffQrBadgeDialogWidgetState extends State<_StaffQrBadgeDialogWidget> {
                         ),
                       ),
                       const SizedBox(height: 12),
-
-                      // 4-Digit Login PIN
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.pin_rounded, size: 14, color: Colors.grey),
-                            const SizedBox(width: 4),
-                            Text(
-                              'PIN: ${staff.pin4}',
-                              style: const TextStyle(
-                                color: Color(0xFF0F172A),
-                                fontWeight: FontWeight.w900,
-                                fontSize: 13,
-                                letterSpacing: 1.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                       const SizedBox(height: 6),
                       Text(
                         'Scan at any OLOF Kiosk for instant station access',

@@ -311,45 +311,7 @@ class _QrCard extends StatelessWidget {
             ),
           ),
 
-          // PIN
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: _roleColor.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _roleColor.withValues(alpha: 0.25)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.pin_rounded, size: 16, color: _roleColor),
-                const SizedBox(width: 8),
-                Text(
-                  'PIN: ',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: isDark
-                        ? AppColors.textSecondary
-                        : AppColors.lightTextSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  staff.pin4,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 6,
-                    color: _roleColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
           // Print & Save Badge Button
           Padding(
@@ -377,7 +339,7 @@ class _QrCard extends StatelessWidget {
             padding:
                 const EdgeInsets.only(left: 16, right: 16, bottom: 16),
             child: Text(
-              'Scan QR or enter PIN on any OLOF kiosk to access your station.',
+              'Scan QR on any OLOF kiosk for instant station access.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 11,

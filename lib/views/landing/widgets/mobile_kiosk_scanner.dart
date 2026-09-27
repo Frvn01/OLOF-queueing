@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -9,11 +8,10 @@ import '../../../providers/admin_provider.dart';
 import '../../../providers/doctor_provider.dart';
 import '../../../shared/widgets/super_admin_department_dialog.dart';
 
-/// Enterprise-grade, secure QR Scanner & PIN Terminal for Mobile & Tablet Kiosks.
+/// Enterprise-grade QR Scanner & Station Terminal for Mobile & Tablet Kiosks.
 /// - Scans staff QR badge and automatically directs to assigned clinical station.
 /// - Non-super-admin: Auto-redirects directly to station (Doctor, Nurse, Receptionist, Ophtha).
 /// - Super-admin: Prompts destination department picker modal.
-/// - Zero credential leaks: No plain PIN hints, no exposed Super Admin QR buttons.
 /// - Clean, modern hospital-grade aesthetics with frosted glass and tactile feedback.
 class MobileKioskScanner extends StatefulWidget {
   final bool isDark;
@@ -34,21 +32,16 @@ class _MobileKioskScannerState extends State<MobileKioskScanner>
   bool _isProcessing = false;
   String? _statusMessage;
   bool _isSuccess = false;
-  bool _isPinMode = false;
   bool _isTorchOn = false;
-  String _enteredPin = '';
+
+  final _barcodeCtrl = TextEditingController();
+  final _barcodeFocus = FocusNode();
 
   late AnimationController _laserAnimController;
   late Animation<double> _laserAnimation;
 
   late AnimationController _shakeAnimController;
   late Animation<double> _shakeAnimation;
-
-  bool get _isMobileCameraSupported {
-    if (kIsWeb) return true;
-    return defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS;
-  }
 
   @override
   void initState() {
@@ -76,12 +69,7 @@ class _MobileKioskScannerState extends State<MobileKioskScanner>
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await context.read<AdminProvider>().loadStaff();
-      if (_isMobileCameraSupported) {
-        _startScanner();
-      } else {
-        // Fallback to secure PIN mode on desktop platforms without camera
-        setState(() => _isPinMode = true);
-      }
+      _startScanner();
     });
   }
 
@@ -95,13 +83,14 @@ class _MobileKioskScannerState extends State<MobileKioskScanner>
       setState(() => _isScannerReady = true);
     } catch (e) {
       debugPrint('MobileScanner initialization error: $e');
-      setState(() => _isPinMode = true);
     }
   }
 
   @override
   void dispose() {
     _scannerCtrl?.dispose();
+    _barcodeCtrl.dispose();
+    _barcodeFocus.dispose();
     _laserAnimController.dispose();
     _shakeAnimController.dispose();
     super.dispose();
@@ -145,69 +134,10 @@ class _MobileKioskScannerState extends State<MobileKioskScanner>
     _onStaffAuthenticated(staff);
   }
 
-  Future<void> _handlePinDigit(String digit) async {
-    if (_isProcessing || _enteredPin.length >= 4) return;
-
-    setState(() {
-      _enteredPin += digit;
-      _statusMessage = null;
-    });
-
-    if (_enteredPin.length == 4) {
-      await _validatePin(_enteredPin);
-    }
-  }
-
-  void _handlePinBackspace() {
-    if (_isProcessing || _enteredPin.isEmpty) return;
-    setState(() {
-      _enteredPin = _enteredPin.substring(0, _enteredPin.length - 1);
-      _statusMessage = null;
-    });
-  }
-
-  void _handlePinClear() {
-    if (_isProcessing) return;
-    setState(() {
-      _enteredPin = '';
-      _statusMessage = null;
-    });
-  }
-
-  Future<void> _validatePin(String pin) async {
-    setState(() {
-      _isProcessing = true;
-      _statusMessage = 'Verifying Staff PIN...';
-    });
-
-    final adminProv = context.read<AdminProvider>();
-    final staff = adminProv.resolvePin(pin);
-
-    if (staff == null) {
-      _shakeAnimController.forward(from: 0);
-      setState(() {
-        _statusMessage = 'Invalid Security PIN • Access Denied';
-        _isSuccess = false;
-      });
-
-      await Future.delayed(const Duration(milliseconds: 1800));
-      if (mounted) {
-        setState(() {
-          _enteredPin = '';
-          _statusMessage = null;
-          _isProcessing = false;
-        });
-      }
-      return;
-    }
-
-    _onStaffAuthenticated(staff);
-  }
-
   Future<void> _onStaffAuthenticated(StaffUser staff) async {
     setState(() {
       _isSuccess = true;
-      _statusMessage = 'Access Authorized \u2022 Welcome, ${staff.name}';
+      _statusMessage = 'Access Authorized • Welcome, ${staff.name}';
     });
 
     // If logging in as a Doctor, activate their profile in DoctorProvider
@@ -233,7 +163,6 @@ class _MobileKioskScannerState extends State<MobileKioskScanner>
           _isProcessing = false;
           _statusMessage = null;
           _isSuccess = false;
-          _enteredPin = '';
         });
       }
       return;
@@ -248,7 +177,6 @@ class _MobileKioskScannerState extends State<MobileKioskScanner>
         _isProcessing = false;
         _statusMessage = null;
         _isSuccess = false;
-        _enteredPin = '';
       });
     }
   }
@@ -297,22 +225,10 @@ class _MobileKioskScannerState extends State<MobileKioskScanner>
               // ── Kiosk Header ──────────────────────────────────────────────
               _buildHeader(isDark),
 
-              // ── Main Content: Camera Scanner vs PIN Pad ───────────────────
+              // ── Main Content: Camera & 2D Barcode Scanner ─────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  transitionBuilder: (child, anim) => FadeTransition(
-                    opacity: anim,
-                    child: ScaleTransition(
-                      scale: Tween<double>(begin: 0.98, end: 1.0).animate(anim),
-                      child: child,
-                    ),
-                  ),
-                  child: _isPinMode
-                      ? _buildPinPadView(isDark)
-                      : _buildCameraScannerView(isDark),
-                ),
+                child: _buildCameraScannerView(isDark),
               ),
 
               // ── Security Feedback / Status Toast ─────────────────────────
@@ -383,9 +299,7 @@ class _MobileKioskScannerState extends State<MobileKioskScanner>
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    _isPinMode
-                        ? 'Staff PIN Authentication'
-                        : 'Badge Auto-Detection Active',
+                    'Badge Auto-Detection Active',
                     style: TextStyle(
                       fontSize: 11,
                       color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
@@ -488,15 +402,15 @@ class _MobileKioskScannerState extends State<MobileKioskScanner>
                                 ),
                                 const SizedBox(height: 4),
                                 const Text(
-                                  'Switch to PIN mode or allow camera permission.',
+                                  'Camera is not available. Connect a webcam or scan badge below.',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(color: Colors.white70, fontSize: 11.5),
                                 ),
                                 const SizedBox(height: 16),
                                 ElevatedButton.icon(
-                                  onPressed: () => setState(() => _isPinMode = true),
-                                  icon: const Icon(Icons.dialpad_rounded, size: 16),
-                                  label: const Text('Use PIN Authentication'),
+                                  onPressed: _startScanner,
+                                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                                  label: const Text('Retry Camera'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF059669),
                                     foregroundColor: Colors.white,
@@ -653,21 +567,60 @@ class _MobileKioskScannerState extends State<MobileKioskScanner>
 
         const SizedBox(height: 14),
 
-        // Action Switch to PIN Pad Mode
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () => setState(() => _isPinMode = true),
-            icon: const Icon(Icons.dialpad_rounded, size: 18),
-            label: const Text('Enter Confidential 4-Digit PIN Instead'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: isDark ? const Color(0xFF38BDF8) : AppColors.primary,
-              side: BorderSide(
-                color: isDark ? const Color(0xFF0369A1) : AppColors.primary.withValues(alpha: 0.4),
-                width: 1.3,
+        // USB / Bluetooth Barcode Reader Input
+        TextField(
+          controller: _barcodeCtrl,
+          focusNode: _barcodeFocus,
+          textInputAction: TextInputAction.go,
+          style: TextStyle(
+            fontSize: 13,
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
+          ),
+          onSubmitted: (v) {
+            final trimmed = v.trim();
+            if (trimmed.isNotEmpty) {
+              _barcodeCtrl.clear();
+              _processQrCode(trimmed);
+            }
+          },
+          decoration: InputDecoration(
+            hintText: 'Or scan badge with USB reader / enter QR code...',
+            hintStyle: TextStyle(
+              fontSize: 12,
+              color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+            ),
+            prefixIcon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+              onPressed: () {
+                final trimmed = _barcodeCtrl.text.trim();
+                if (trimmed.isNotEmpty) {
+                  _barcodeCtrl.clear();
+                  _processQrCode(trimmed);
+                }
+              },
+            ),
+            filled: true,
+            fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFCBD5E1),
               ),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFCBD5E1),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFF10B981),
+                width: 1.5,
+              ),
             ),
           ),
         ),
@@ -748,207 +701,7 @@ class _MobileKioskScannerState extends State<MobileKioskScanner>
     );
   }
 
-  // ── PIN Pad View ───────────────────────────────────────────────────────────
 
-  Widget _buildPinPadView(bool isDark) {
-    return Column(
-      key: const ValueKey('pin_view'),
-      children: [
-        const Text(
-          'Staff Passcode Verification',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Enter your assigned 4-digit confidential security code',
-          style: TextStyle(
-            fontSize: 11.5,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-          ),
-        ),
-        const SizedBox(height: 18),
-
-        // 4 Pin Dot Indicators (Masked & Protected)
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(4, (index) {
-            final isFilled = index < _enteredPin.length;
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              margin: const EdgeInsets.symmetric(horizontal: 10),
-              width: isFilled ? 18 : 16,
-              height: isFilled ? 18 : 16,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isFilled
-                    ? const Color(0xFF10B981)
-                    : Colors.transparent,
-                border: Border.all(
-                  color: isFilled
-                      ? const Color(0xFF10B981)
-                      : (isDark ? const Color(0xFF475569) : const Color(0xFF94A3B8)),
-                  width: 2,
-                ),
-                boxShadow: isFilled
-                    ? [
-                        BoxShadow(
-                          color: const Color(0xFF10B981).withValues(alpha: 0.5),
-                          blurRadius: 10,
-                          spreadRadius: 2,
-                        ),
-                      ]
-                    : null,
-              ),
-            );
-          }),
-        ),
-
-        const SizedBox(height: 20),
-
-        // Keypad Grid: 3x4 layout (1-9, C, 0, Backspace)
-        Container(
-          constraints: const BoxConstraints(maxWidth: 320),
-          child: Column(
-            children: [
-              _buildKeypadRow(['1', '2', '3'], isDark),
-              const SizedBox(height: 10),
-              _buildKeypadRow(['4', '5', '6'], isDark),
-              const SizedBox(height: 10),
-              _buildKeypadRow(['7', '8', '9'], isDark),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildSpecialKey(
-                    label: 'C',
-                    onTap: _handlePinClear,
-                    isDark: isDark,
-                    color: isDark ? const Color(0xFFEF4444) : const Color(0xFFDC2626),
-                  ),
-                  _buildDigitKey('0', isDark),
-                  _buildSpecialKey(
-                    icon: Icons.backspace_rounded,
-                    onTap: _handlePinBackspace,
-                    isDark: isDark,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 18),
-
-        // Action Switch to Camera Scanner Mode
-        SizedBox(
-          width: double.infinity,
-          child: TextButton.icon(
-            onPressed: () {
-              setState(() {
-                _isPinMode = false;
-                _enteredPin = '';
-                _statusMessage = null;
-              });
-              if (!_isScannerReady) _startScanner();
-            },
-            icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
-            label: const Text('Back to Live Camera Scanner'),
-            style: TextButton.styleFrom(
-              foregroundColor: isDark ? const Color(0xFF38BDF8) : AppColors.primary,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildKeypadRow(List<String> digits, bool isDark) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: digits.map((d) => _buildDigitKey(d, isDark)).toList(),
-    );
-  }
-
-  Widget _buildDigitKey(String digit, bool isDark) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _handlePinDigit(digit),
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          width: 72,
-          height: 52,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
-              width: 1.2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Text(
-            digit,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSpecialKey({
-    String? label,
-    IconData? icon,
-    required VoidCallback onTap,
-    required bool isDark,
-    Color? color,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          width: 72,
-          height: 52,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF162032) : const Color(0xFFE2E8F0),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark ? const Color(0xFF28354D) : const Color(0xFFCBD5E1),
-              width: 1.2,
-            ),
-          ),
-          child: label != null
-              ? Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: color ?? (isDark ? Colors.white70 : Colors.black87),
-                  ),
-                )
-              : Icon(
-                  icon,
-                  size: 20,
-                  color: color ?? (isDark ? Colors.white70 : Colors.black87),
-                ),
-        ),
-      ),
-    );
-  }
 
   // ── Status Toast Banner ────────────────────────────────────────────────────
 
