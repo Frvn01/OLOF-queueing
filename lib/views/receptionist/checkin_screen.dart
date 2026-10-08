@@ -13,6 +13,7 @@ import '../../providers/clinic_provider.dart';
 import '../../data/models/doctor.dart';
 import '../../data/models/clinic_room.dart';
 import '../../shared/widgets/searchable_picker_dialog.dart';
+import '../../shared/widgets/queue_ticket_print.dart';
 import 'widgets/clinic_management_dialog.dart';
 
 /// Check-in screen — select department and purpose, then join queue
@@ -994,7 +995,39 @@ class _CheckinScreenState extends State<CheckinScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+
+              // Print Ticket Button
+              ElevatedButton.icon(
+                onPressed: () {
+                  final isDark = context.read<ThemeProvider>().isDarkMode;
+                  showQueueTicketPrintDialog(
+                    context,
+                    isDark: isDark,
+                    ticket: QueueTicketData(
+                      queueNumber: _assignedQueueNumber ?? '',
+                      patientName: _patient?.displayName ?? '',
+                      department: _selectedDepartment ?? '',
+                      doctorName: _selectedDoctor?.name ?? _patient?.assignedDoctor,
+                      roomName: _selectedRoom?.name ?? _selectedDoctor?.room ?? _patient?.assignedRoom,
+                      purpose: _selectedPurpose,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.print_rounded, size: 18),
+                label: const Text('Print Queue Ticket'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                  backgroundColor: _selectedDepartment == 'ENT'
+                      ? AppColors.entColor
+                      : AppColors.eyesColor,
+                  foregroundColor: Colors.white,
+                  textStyle: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(height: 10),
+
               ElevatedButton.icon(
                 onPressed: () => context.go('/receptionist'),
                 icon: const Icon(Icons.dashboard_rounded),

@@ -117,7 +117,7 @@ List<StaffUser> _defaultStaff() {
     ),
     const StaffUser(
       id: 'doc-ent-1',
-      name: 'Dr. DR. LORENZO VERA CRUZ',
+      name: 'Dr. Lorenzo Vera Cruz',
       role: 'doctor',
       department: 'ENT',
       assignedRoom: 'ENT ROOM 1',
@@ -125,7 +125,7 @@ List<StaffUser> _defaultStaff() {
     ),
     const StaffUser(
       id: 'doc-eye-1',
-      name: 'Dr. DR. IAN J. DAGUMAN',
+      name: 'Dr. Ian J. Daguman',
       role: 'doctor',
       department: 'EYES',
       assignedRoom: 'OPHTHA ROOM 1',

@@ -12,6 +12,7 @@ import '../../data/models/queue_entry.dart';
 import '../../providers/queue_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/clinic_provider.dart';
+import '../../core/utils/helpers.dart';
 
 /// Client Display Screen for TV / Web Waiting Room Projection
 /// Specifically designed for eye and ENT clinic patients:
@@ -74,14 +75,14 @@ class _DisplayScreenState extends State<DisplayScreen>
 
   String? _getServingDoctor(QueueEntry serving, String department) {
     if (serving.assignedDoctor != null && serving.assignedDoctor!.trim().isNotEmpty) {
-      return serving.assignedDoctor!;
+      return DoctorHelper.formatName(serving.assignedDoctor!);
     }
     // Check if room has an assigned doctor in ClinicProvider
     if (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty) {
       try {
         final clinic = context.read<ClinicProvider>();
         final doc = clinic.getDoctorForRoom(serving.assignedRoom!);
-        if (doc != null) return doc.name;
+        if (doc != null) return DoctorHelper.formatName(doc.name);
       } catch (_) {}
     }
     // Return null for new/unassigned patients
@@ -137,12 +138,26 @@ class _DisplayScreenState extends State<DisplayScreen>
         child: Stack(
           children: [
             SafeArea(
-        child: Consumer<QueueProvider>(
-          builder: (context, queueProv, _) {
+        child: Consumer2<QueueProvider, ClinicProvider>(
+          builder: (context, queueProv, clinicProv, _) {
             final entServing = queueProv.getNowServing(AppConstants.deptEnt);
             final eyesServing = queueProv.getNowServing(AppConstants.deptEyes);
             final entWaiting = queueProv.getWaiting(AppConstants.deptEnt);
             final eyesWaiting = queueProv.getWaiting(AppConstants.deptEyes);
+
+            // Active doctors per department (only those that are active)
+            final entDoctors = clinicProv.doctors
+                .where((d) =>
+                    d.isActive &&
+                    (d.department == AppConstants.deptEnt ||
+                        d.department == 'BOTH'))
+                .toList();
+            final eyesDoctors = clinicProv.doctors
+                .where((d) =>
+                    d.isActive &&
+                    (d.department == AppConstants.deptEyes ||
+                        d.department == 'BOTH'))
+                .toList();
 
             // Trigger chime if serving changed
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -168,6 +183,8 @@ class _DisplayScreenState extends State<DisplayScreen>
                                 waitingList: entWaiting,
                                 isDark: isDark,
                                 isHighContrast: isHighContrast,
+                                doctors: entDoctors,
+                                queueProv: queueProv,
                               ),
                             ),
                             Container(
@@ -188,6 +205,8 @@ class _DisplayScreenState extends State<DisplayScreen>
                                 waitingList: eyesWaiting,
                                 isDark: isDark,
                                 isHighContrast: isHighContrast,
+                                doctors: eyesDoctors,
+                                queueProv: queueProv,
                               ),
                             ),
                           ],
@@ -206,6 +225,8 @@ class _DisplayScreenState extends State<DisplayScreen>
                                 waitingList: entWaiting,
                                 isDark: isDark,
                                 isHighContrast: isHighContrast,
+                                doctors: entDoctors,
+                                queueProv: queueProv,
                               ),
                               Divider(
                                 height: 2,
@@ -224,6 +245,8 @@ class _DisplayScreenState extends State<DisplayScreen>
                                 waitingList: eyesWaiting,
                                 isDark: isDark,
                                 isHighContrast: isHighContrast,
+                                doctors: eyesDoctors,
+                                queueProv: queueProv,
                               ),
                             ],
                           ),
@@ -552,6 +575,8 @@ class _DisplayScreenState extends State<DisplayScreen>
     required List<QueueEntry> waitingList,
     required bool isDark,
     required bool isHighContrast,
+    List<dynamic> doctors = const [],   // Doctor models from ClinicProvider
+    QueueProvider? queueProv,           // For per-doctor queue lookups
   }) {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -629,29 +654,333 @@ class _DisplayScreenState extends State<DisplayScreen>
           ),
           const SizedBox(height: 14),
 
-          // NOW SERVING CARD (Large Prominent Call Display)
-          Expanded(
-            flex: 3,
-            child: _buildNowServingCard(
-              department: department,
-              serving: serving,
-              accentColor: accentColor,
-              isDark: isDark,
-              isHighContrast: isHighContrast,
-            ),
-          ),
-          const SizedBox(height: 14),
+          // ── Per-doctor panels (ONLY for doctors who actually have active patients queued) ──
+          Builder(
+            builder: (context) {
+              // Find doctors who ACTUALLY HAVE PATIENTS QUEUED today (serving or waiting)
+              final activeQueuedDocs = (queueProv != null)
+                  ? doctors.where((doc) {
+                      final docName = doc.name as String;
+                      final docServing =
+                          queueProv.getDoctorNowServing(department, docName);
+                      final docWaiting =
+                          queueProv.getDoctorWaiting(department, docName);
+                      return docServing != null || docWaiting.isNotEmpty;
+                    }).toList()
+                  : <dynamic>[];
 
-          // UP NEXT / WAITING QUEUE TICKER
-          Expanded(
-            flex: 2,
-            child: _buildUpcomingQueueCard(
-              waitingList: waitingList,
-              accentColor: accentColor,
-              isDark: isDark,
-              isHighContrast: isHighContrast,
-            ),
+              if (activeQueuedDocs.length > 1 && queueProv != null) {
+                // MULTIPLE active doctors — scrollable list that NEVER overflows!
+                return Expanded(
+                  child: ListView.separated(
+                    padding: EdgeInsets.zero,
+                    itemCount: activeQueuedDocs.length,
+                    separatorBuilder: (context, index) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final doc = activeQueuedDocs[index];
+                      final docName = doc.name as String;
+                      final docServing =
+                          queueProv.getDoctorNowServing(department, docName);
+                      final docWaiting =
+                          queueProv.getDoctorWaiting(department, docName);
+                      final docTotal =
+                          queueProv.getDoctorQueue(department, docName).length;
+                      return _buildDoctorQueueCard(
+                        doctorName: docName,
+                        room: doc.room as String?,
+                        serving: docServing,
+                        waitingCount: docWaiting.length,
+                        totalCount: docTotal,
+                        waitingEntries: docWaiting,
+                        accentColor: accentColor,
+                        isDark: isDark,
+                        isHighContrast: isHighContrast,
+                      );
+                    },
+                  ),
+                );
+              } else if (activeQueuedDocs.length == 1 && queueProv != null) {
+                // SINGLE active doctor — prominent full-size TV display
+                final singleDoc = activeQueuedDocs.first;
+                final docName = singleDoc.name as String;
+                final docServing =
+                    queueProv.getDoctorNowServing(department, docName);
+                final docWaiting =
+                    queueProv.getDoctorWaiting(department, docName);
+                return Expanded(
+                  child: Column(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: _buildNowServingCard(
+                          department: department,
+                          serving: docServing,
+                          accentColor: accentColor,
+                          isDark: isDark,
+                          isHighContrast: isHighContrast,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Expanded(
+                        flex: 2,
+                        child: _buildUpcomingQueueCard(
+                          waitingList: docWaiting,
+                          accentColor: accentColor,
+                          isDark: isDark,
+                          isHighContrast: isHighContrast,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              } else {
+                // STANDBY / NO QUEUED DOCTORS OR GENERAL QUEUE
+                return Expanded(
+                  child: Column(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: _buildNowServingCard(
+                          department: department,
+                          serving: serving,
+                          accentColor: accentColor,
+                          isDark: isDark,
+                          isHighContrast: isHighContrast,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Expanded(
+                        flex: 2,
+                        child: _buildUpcomingQueueCard(
+                          waitingList: waitingList,
+                          accentColor: accentColor,
+                          isDark: isDark,
+                          isHighContrast: isHighContrast,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+            },
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Per-doctor summary card shown on the TV display
+  Widget _buildDoctorQueueCard({
+    required String doctorName,
+    String? room,
+    required QueueEntry? serving,
+    required int waitingCount,
+    required int totalCount,
+    List<QueueEntry> waitingEntries = const [],
+    required Color accentColor,
+    required bool isDark,
+    required bool isHighContrast,
+  }) {
+    final cleanDocName = DoctorHelper.formatName(doctorName);
+    final cardBg = isDark ? AppColors.surfaceMid : AppColors.lightSurface;
+    final borderColor = isDark ? AppColors.surfaceLight : AppColors.lightBorder;
+    final textPrimary = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final textSub = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: serving != null
+              ? accentColor.withValues(alpha: 0.6)
+              : borderColor,
+          width: serving != null ? 2 : 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: serving != null
+                ? accentColor.withValues(alpha: 0.15)
+                : Colors.black.withValues(alpha: isDark ? 0.15 : 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // Doctor avatar
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: accentColor.withValues(alpha: 0.4), width: 1.5),
+                ),
+                child: Icon(
+                  Icons.person_rounded,
+                  color: accentColor,
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      cleanDocName,
+                      style: TextStyle(
+                        fontSize: isHighContrast ? 17 : 15,
+                        fontWeight: FontWeight.w900,
+                        color: textPrimary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (room != null && room.isNotEmpty)
+                      Row(
+                        children: [
+                          Icon(Icons.meeting_room_rounded,
+                              size: 13, color: accentColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            room,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: textSub,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+              // Serving badge
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (serving != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            AppColors.nowServing,
+                            AppColors.nowServing.withValues(alpha: 0.8)
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.nowServing.withValues(alpha: 0.3),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        'NOW: #${serving.queueNumber.split('-').last}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.surfaceDarkest,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                  ] else ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: (isDark
+                                ? AppColors.surfaceLight
+                                : AppColors.lightBg)
+                            .withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Text(
+                        'WAITING FOR CALL',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          color: textSub,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                  Text(
+                    '$waitingCount waiting  •  $totalCount total',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: textSub,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          if (waitingEntries.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Divider(height: 1, color: borderColor.withValues(alpha: 0.5)),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Text(
+                  'Upcoming: ',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: textSub,
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: waitingEntries.take(5).map((e) {
+                        return Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? AppColors.surfaceLight.withValues(alpha: 0.6)
+                                : AppColors.lightSurfaceMid,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                                color: borderColor.withValues(alpha: 0.7)),
+                          ),
+                          child: Text(
+                            '#${e.queueNumber.split('-').last}',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                              color: textPrimary,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

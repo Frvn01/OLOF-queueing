@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/app_image_helper.dart';
+import '../../core/utils/helpers.dart';
 import '../../data/models/queue_entry.dart';
 import '../../data/models/vital_signs.dart';
 import '../../providers/doctor_provider.dart';
@@ -39,10 +40,13 @@ class _DoctorQueueScreenState extends State<DoctorQueueScreen> with SingleTicker
     final queueProv = context.watch<QueueProvider>();
     final allQueue = queueProv.todayQueue;
 
-    final myQueue = allQueue.where((e) =>
-        e.department == doctorProv.activeDepartment ||
-        (e.assignedDoctor != null && e.assignedDoctor == doctorProv.activeDoctor)
-    ).toList();
+    final myQueue = allQueue.where((e) {
+      if (e.assignedDoctor != null && e.assignedDoctor!.isNotEmpty) {
+        return DoctorHelper.isSameDoctor(
+            e.assignedDoctor, doctorProv.activeDoctor);
+      }
+      return e.department == doctorProv.activeDepartment;
+    }).toList();
 
     final waitingList = myQueue.where((e) => e.isWaiting).toList();
     final inProgressList = myQueue.where((e) => e.isServing).toList();

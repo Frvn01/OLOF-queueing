@@ -10,6 +10,13 @@ import '../../providers/doctor_provider.dart';
 import '../../shared/widgets/olof_logo.dart';
 import '../../shared/widgets/super_admin_department_dialog.dart';
 
+// =============================================================================
+// [PRODUCTION FEATURE - QR LOGIN SCREEN]
+// Dedicated QR Badge & 2D barcode scanning authentication screen.
+// Currently bypassed on LandingScreen during beta testing.
+// Maintained and ready for production deployment.
+// =============================================================================
+
 /// Secure QR-Only Staff Authentication Screen.
 /// - Scans staff QR badge via camera or USB 2D barcode scanner.
 /// - Automatically resolves identity and unlocks the assigned clinical station.

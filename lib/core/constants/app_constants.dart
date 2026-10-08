@@ -20,8 +20,8 @@ class AppConstants {
 
   // ── DOCTORS (shown on display screen instead of patient name) ─────────────
   static const Map<String, String> departmentDoctors = {
-    deptEnt: 'Dr. DR. LORENZO VERA CRUZ',
-    deptEyes: 'Dr. DR. IAN J. DAGUMAN',
+    deptEnt: 'Dr. Lorenzo Vera Cruz',
+    deptEyes: 'Dr. Ian J. Daguman',
   };
 
   // ── ROOMS (matching Supabase clinic_rooms) ──────────────

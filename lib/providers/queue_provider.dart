@@ -36,9 +36,38 @@ class QueueProvider extends ChangeNotifier {
   /// Get currently serving for a department
   QueueEntry? getNowServing(String department) => _nowServing[department];
 
+  /// Get all entries currently serving in a department (across all doctors)
+  List<QueueEntry> getAllServing(String department) =>
+      getQueue(department).where((e) => e.isServing).toList();
+
   /// Get stats for a department
   Map<String, int> getStats(String department) =>
       _stats[department] ?? {};
+
+  /// Get all queue entries for a specific doctor today (filtered from dept queue).
+  List<QueueEntry> getDoctorQueue(String department, String doctorName) {
+    return getQueue(department)
+        .where((e) =>
+            e.assignedDoctor != null &&
+            DoctorHelper.isSameDoctor(e.assignedDoctor, doctorName))
+        .toList();
+  }
+
+  /// Get 'now serving' entry for a specific doctor.
+  QueueEntry? getDoctorNowServing(String department, String doctorName) {
+    try {
+      return getDoctorQueue(department, doctorName)
+          .firstWhere((e) => e.isServing);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Get waiting entries for a specific doctor.
+  List<QueueEntry> getDoctorWaiting(String department, String doctorName) =>
+      getDoctorQueue(department, doctorName)
+          .where((e) => e.isWaiting)
+          .toList();
 
   /// Initialize and load today's queue
   Future<void> initialize({bool forceRefresh = true}) async {
@@ -67,7 +96,11 @@ class QueueProvider extends ChangeNotifier {
     String? doctor,
     String? room,
   }) async {
-    final queueNumber = _repo.getNextQueueNumber(department);
+    final cleanDoc = (doctor != null && doctor.isNotEmpty)
+        ? DoctorHelper.formatName(doctor)
+        : null;
+    // Use per-doctor sequence when doctor is assigned
+    final queueNumber = _repo.getNextQueueNumber(department, doctorName: cleanDoc);
     final entry = QueueEntry(
       id: IdGenerator.generateUuid(),
       patientId: patientId,
@@ -76,7 +109,7 @@ class QueueProvider extends ChangeNotifier {
       department: department,
       queueNumber: queueNumber,
       purpose: purpose,
-      assignedDoctor: doctor,
+      assignedDoctor: cleanDoc,
       assignedRoom: room,
       dateKey: DateHelper.todayKey(),
     );
@@ -87,9 +120,18 @@ class QueueProvider extends ChangeNotifier {
     return saved;
   }
 
-  /// Call next patient
+  /// Call next patient across department
   Future<QueueEntry?> callNext(String department) async {
     final entry = await _repo.callNext(department);
+    await _refreshAll();
+    notifyListeners();
+    return entry;
+  }
+
+  /// Call next patient specifically for a doctor
+  Future<QueueEntry?> callDoctorNext(
+      String department, String doctorName) async {
+    final entry = await _repo.callDoctorNext(department, doctorName);
     await _refreshAll();
     notifyListeners();
     return entry;

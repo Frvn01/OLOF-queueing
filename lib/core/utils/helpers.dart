@@ -56,3 +56,39 @@ class QueueNumberGenerator {
     return '$prefix-${sequence.toString().padLeft(3, '0')}';
   }
 }
+
+class DoctorHelper {
+  /// Cleans and formats doctor name without repeating Dr./DR. and with clean casing
+  static String formatName(String raw) {
+    var s = raw.trim();
+    while (RegExp(r'^(dr\.|dr|doctor)\s*', caseSensitive: false).hasMatch(s)) {
+      s = s.replaceFirst(RegExp(r'^(dr\.|dr|doctor)\s*', caseSensitive: false), '').trim();
+    }
+    if (s.isNotEmpty && s == s.toUpperCase()) {
+      s = s
+          .split(' ')
+          .map((w) => w.isEmpty
+              ? ''
+              : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
+          .join(' ');
+    }
+    return 'Dr. $s';
+  }
+
+  /// Normalized comparison for two doctor names
+  static bool isSameDoctor(String? a, String? b) {
+    if (a == null || b == null) return false;
+    final cleanA = a
+        .replaceAll(RegExp(r'\b(dr|doctor)\.?\s*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .toLowerCase();
+    final cleanB = b
+        .replaceAll(RegExp(r'\b(dr|doctor)\.?\s*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .toLowerCase();
+    return cleanA == cleanB;
+  }
+}
+

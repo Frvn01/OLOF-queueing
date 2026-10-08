@@ -8,6 +8,13 @@ import '../../../providers/admin_provider.dart';
 import '../../../providers/doctor_provider.dart';
 import '../../../shared/widgets/super_admin_department_dialog.dart';
 
+// =============================================================================
+// [PRODUCTION FEATURE - QR CODE SCANNER & STATION TERMINAL]
+// Enterprise-grade QR Badge scanning terminal for staff authentication.
+// Currently commented out on LandingScreen during beta testing.
+// Maintained and ready for production deployment.
+// =============================================================================
+
 /// Enterprise-grade QR Scanner & Station Terminal for Mobile & Tablet Kiosks.
 /// - Scans staff QR badge and automatically directs to assigned clinical station.
 /// - Non-super-admin: Auto-redirects directly to station (Doctor, Nurse, Receptionist, Ophtha).

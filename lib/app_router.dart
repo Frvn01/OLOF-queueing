@@ -19,6 +19,21 @@ import 'views/auth/qr_login_screen.dart';
 import 'views/auth/staff_qr_card_screen.dart';
 import 'data/models/queue_entry.dart';
 
+/// Returns true if the current platform supports the queue display screen.
+/// Restricted to desktop (Windows/macOS/Linux) and web — NOT mobile (Android/iOS).
+bool get _isDisplayPlatform {
+  if (kIsWeb) return true;
+  try {
+    // ignore: depend_on_referenced_packages
+    final platform = defaultTargetPlatform;
+    return platform == TargetPlatform.windows ||
+        platform == TargetPlatform.macOS ||
+        platform == TargetPlatform.linux;
+  } catch (_) {
+    return false;
+  }
+}
+
 /// App router configuration
 /// - Web: Strictly Client TV Display Screen
 /// - Desktop: TV Display + Unlocked Nurse & Staff Modules
@@ -44,10 +59,16 @@ final GoRouter appRouter = GoRouter(
       path: '/auth/staff-cards',
       builder: (context, state) => const StaffQrCardScreen(),
     ),
-    // Display route (Dedicated for Web / TV projection)
+    // Display route — Desktop & Web only. Mobile is redirected to landing.
     GoRoute(
       path: '/display',
-      builder: (context, state) => const DisplayScreen(),
+      builder: (context, state) {
+        if (!_isDisplayPlatform) {
+          // Mobile devices get redirected back to landing
+          return const LandingScreen();
+        }
+        return const DisplayScreen();
+      },
     ),
     // Staff kiosk routes (Mobile / Tablet only)
     GoRoute(

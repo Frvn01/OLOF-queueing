@@ -8,6 +8,10 @@ import '../../shared/widgets/olof_logo.dart';
 import '../../shared/widgets/tutorial_dialog.dart';
 import '../../providers/theme_provider.dart';
 
+import '../../data/models/patient.dart';
+import '../../data/models/queue_entry.dart';
+import '../../shared/widgets/queue_ticket_print.dart';
+
 /// Receptionist Dashboard — main hub for registration and check-in
 class ReceptionistScreen extends StatefulWidget {
   const ReceptionistScreen({super.key});
@@ -18,6 +22,7 @@ class ReceptionistScreen extends StatefulWidget {
 
 class _ReceptionistScreenState extends State<ReceptionistScreen> {
   final TextEditingController _searchController = TextEditingController();
+  String _selectedDeptFilter = 'ALL'; // 'ALL', 'ENT', 'EYES', 'TODAY_QUEUE'
 
   @override
   void initState() {
@@ -77,7 +82,7 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
                       SizedBox(height: isLandscape ? 14 : 22),
 
                       // Recent Registrations
-                      _buildRecentRegistrations(context, isDark),
+                      _buildPatientDirectorySection(context, isDark),
                     ],
                   ),
                 ),
@@ -594,71 +599,130 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
     Color color,
     bool isDark,
   ) {
+    final deptKey = dept.contains('ENT') ? 'ENT' : 'EYES';
+    final isSelected = _selectedDeptFilter == deptKey;
     final waiting = stats['waiting'] ?? 0;
     final serving = stats['serving'] ?? 0;
     final completed = stats['completed'] ?? 0;
     final total = stats['total'] ?? 0;
 
     final cardBg = isDark ? AppColors.surfaceMid : AppColors.lightSurface;
-    final borderColor = isDark ? AppColors.surfaceLight : AppColors.lightBorder;
-    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
+    final borderColor = isSelected
+        ? color
+        : (isDark ? AppColors.surfaceLight : AppColors.lightBorder);
+    final subtitleColor =
+        isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: borderColor, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
-            blurRadius: 10,
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedDeptFilter =
+              _selectedDeptFilter == deptKey ? 'ALL' : deptKey;
+        });
+      },
+      borderRadius: BorderRadius.circular(18),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? color.withValues(alpha: isDark ? 0.08 : 0.04)
+              : cardBg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: borderColor,
+            width: isSelected ? 2.0 : 1.5,
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: color.withValues(alpha: 0.4)),
-                ),
-                child: Text(
-                  dept,
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 11.5,
-                    letterSpacing: 0.5,
+          boxShadow: [
+            if (isSelected)
+              BoxShadow(
+                color: color.withValues(alpha: 0.2),
+                blurRadius: 16,
+                spreadRadius: 1,
+              )
+            else
+              BoxShadow(
+                color:
+                    Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+                blurRadius: 10,
+              ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border:
+                        Border.all(color: color.withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    dept,
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11.5,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
-              ),
-              const Spacer(),
-              Text(
-                '$total registered',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: subtitleColor,
+                const Spacer(),
+                Text(
+                  '$total registered',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: subtitleColor,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildMiniStat(
+                    'Waiting', waiting, AppColors.warning, isDark),
+                _buildMiniStat(
+                    'Serving', serving, AppColors.nowServing, isDark),
+                _buildMiniStat(
+                    'Done', completed, AppColors.success, isDark),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () =>
+                    _showDepartmentQueueDialog(context, deptKey, isDark),
+                icon: Icon(Icons.list_alt_rounded,
+                    size: 16, color: color),
+                label: Text(
+                  'View Live Queue',
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.5,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side:
+                      BorderSide(color: color.withValues(alpha: 0.4)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildMiniStat('Waiting', waiting, AppColors.warning, isDark),
-              _buildMiniStat('Serving', serving, AppColors.nowServing, isDark),
-              _buildMiniStat('Done', completed, AppColors.success, isDark),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -687,28 +751,132 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
     );
   }
 
-  Widget _buildRecentRegistrations(BuildContext context, bool isDark) {
-    final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+  Widget _buildPatientDirectorySection(BuildContext context, bool isDark) {
+    final titleColor =
+        isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
     final cardBg = isDark ? AppColors.surfaceMid : AppColors.lightSurface;
-    final borderColor = isDark ? AppColors.surfaceLight : AppColors.lightBorder;
-    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
+    final borderColor =
+        isDark ? AppColors.surfaceLight : AppColors.lightBorder;
+    final subtitleColor =
+        isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
 
-    return Consumer<PatientProvider>(
-      builder: (context, provider, _) {
-        final recent = provider.patients.reversed.take(5).toList();
+    return Consumer2<PatientProvider, QueueProvider>(
+      builder: (context, patientProv, queueProv, _) {
+        final allPatients = patientProv.patients.reversed.toList();
+
+        // Build map: patientId → QueueEntry for today
+        final Map<String, QueueEntry> todayQueueMap = {};
+        for (final entry in queueProv.todayQueue) {
+          todayQueueMap[entry.patientId] = entry;
+        }
+
+        // Categorize patients by department
+        final entPatients = allPatients.where((p) {
+          final entry = todayQueueMap[p.id];
+          if (entry != null) return entry.department == 'ENT';
+          final room = (p.assignedRoom ?? '').toUpperCase();
+          return room.contains('ENT');
+        }).toList();
+
+        final eyesPatients = allPatients.where((p) {
+          final entry = todayQueueMap[p.id];
+          if (entry != null) return entry.department == 'EYES';
+          final room = (p.assignedRoom ?? '').toUpperCase();
+          return room.contains('OPHTHA') || room.contains('EYE');
+        }).toList();
+
+        final todayQueuePatients = allPatients
+            .where((p) => todayQueueMap.containsKey(p.id))
+            .toList();
+
+        // Determine which list to show
+        List<Patient> displayedPatients;
+        String sectionTitle;
+        switch (_selectedDeptFilter) {
+          case 'ENT':
+            displayedPatients = entPatients;
+            sectionTitle = 'ENT Patients';
+            break;
+          case 'EYES':
+            displayedPatients = eyesPatients;
+            sectionTitle = 'Eyes (Ophtha) Patients';
+            break;
+          case 'TODAY_QUEUE':
+            displayedPatients = todayQueuePatients;
+            sectionTitle = "Today's Queued Patients";
+            break;
+          default:
+            displayedPatients = allPatients;
+            sectionTitle = 'All Patients';
+        }
+
+        final filters = [
+          _DeptFilterOption(
+              'ALL', 'All Patients', allPatients.length, AppColors.primary),
+          _DeptFilterOption(
+              'ENT', 'ENT', entPatients.length, AppColors.entColor),
+          _DeptFilterOption(
+              'EYES', 'Eyes', eyesPatients.length, AppColors.eyesColor),
+          _DeptFilterOption('TODAY_QUEUE', "Today's Queue",
+              todayQueuePatients.length, AppColors.cyanCalm),
+        ];
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Recent Registrations',
+              sectionTitle,
               style: TextStyle(
                 fontSize: 16.5,
                 fontWeight: FontWeight.w800,
                 color: titleColor,
               ),
             ),
-            const SizedBox(height: 12),
-            if (recent.isEmpty)
+            const SizedBox(height: 10),
+            // Filter chips
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: filters.map((f) {
+                  final isActive = _selectedDeptFilter == f.key;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(
+                        '${f.label} (${f.count})',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12.5,
+                          color: isActive
+                              ? Colors.white
+                              : (isDark
+                                  ? AppColors.textSecondary
+                                  : AppColors.lightTextSecondary),
+                        ),
+                      ),
+                      selected: isActive,
+                      selectedColor: f.color,
+                      backgroundColor: isDark
+                          ? AppColors.surfaceMid
+                          : AppColors.lightSurfaceMid,
+                      side: BorderSide(
+                        color: isActive
+                            ? f.color
+                            : (isDark
+                                ? AppColors.surfaceLight
+                                : AppColors.lightBorder),
+                      ),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      onSelected: (_) =>
+                          setState(() => _selectedDeptFilter = f.key),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 14),
+            if (displayedPatients.isEmpty)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(24),
@@ -719,22 +887,21 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
                 ),
                 child: Column(
                   children: [
-                    Icon(
-                      Icons.people_outline_rounded,
-                      size: 40,
-                      color: subtitleColor,
-                    ),
+                    Icon(Icons.people_outline_rounded,
+                        size: 40, color: subtitleColor),
                     const SizedBox(height: 10),
                     Text(
-                      'No patients registered yet today',
+                      _selectedDeptFilter == 'ALL'
+                          ? 'No patients registered yet'
+                          : 'No patients found for this filter',
                       style: TextStyle(
-                        color: subtitleColor,
-                        fontWeight: FontWeight.w600,
-                      ),
+                          color: subtitleColor,
+                          fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 14),
                     ElevatedButton.icon(
-                      onPressed: () => context.go('/receptionist/register'),
+                      onPressed: () =>
+                          context.go('/receptionist/register'),
                       icon: const Icon(Icons.person_add_rounded),
                       label: const Text('Register First Patient'),
                     ),
@@ -742,8 +909,16 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
                 ),
               )
             else
-              ...recent.map(
-                (patient) => Container(
+              ...displayedPatients.map((patient) {
+                final queueEntry = todayQueueMap[patient.id];
+                final deptKey = queueEntry?.department;
+                final Color deptColor = deptKey == 'ENT'
+                    ? AppColors.entColor
+                    : deptKey == 'EYES'
+                        ? AppColors.eyesColor
+                        : AppColors.textSecondary;
+
+                return Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
                     color: cardBg,
@@ -751,56 +926,461 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
                     border: Border.all(color: borderColor, width: 1.5),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.03),
+                        color: Colors.black.withValues(
+                            alpha: isDark ? 0.15 : 0.03),
                         blurRadius: 8,
                       ),
                     ],
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 2),
+                        horizontal: 14, vertical: 4),
                     leading: CircleAvatar(
                       radius: 18,
-                      backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+                      backgroundColor: (deptKey == 'ENT'
+                              ? AppColors.entColor
+                              : deptKey == 'EYES'
+                                  ? AppColors.eyesColor
+                                  : AppColors.primary)
+                          .withValues(alpha: 0.15),
                       child: Text(
                         patient.firstName.isNotEmpty
                             ? patient.firstName[0].toUpperCase()
                             : 'P',
-                        style: const TextStyle(
-                          color: AppColors.primary,
+                        style: TextStyle(
+                          color: deptKey == 'ENT'
+                              ? AppColors.entColor
+                              : deptKey == 'EYES'
+                                  ? AppColors.eyesColor
+                                  : AppColors.primary,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
-                    title: Text(
-                      patient.displayName,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: titleColor,
-                        fontSize: 14.5,
-                      ),
+                    title: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            patient.displayName,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: titleColor,
+                              fontSize: 14.5,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (deptKey != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color:
+                                  deptColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                  color: deptColor.withValues(
+                                      alpha: 0.3)),
+                            ),
+                            child: Text(
+                              deptKey,
+                              style: TextStyle(
+                                color: deptColor,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 10,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                    subtitle: Text(
-                      'ID: ${patient.patientNo} • ${patient.sex}, ${patient.age} yrs',
-                      style: TextStyle(
-                        color: subtitleColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    subtitle: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'ID: ${patient.patientNo} • ${patient.sex}, ${patient.age} yrs',
+                            style: TextStyle(
+                              color: subtitleColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (queueEntry != null) ...[
+                          const SizedBox(width: 8),
+                          _buildQueueStatusBadge(queueEntry, isDark),
+                        ],
+                      ],
                     ),
-                    trailing: Icon(
-                      Icons.chevron_right_rounded,
-                      color: subtitleColor,
-                      size: 20,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (queueEntry != null)
+                          IconButton(
+                            onPressed: () =>
+                                showQueueTicketPrintDialog(
+                              context,
+                              ticket: QueueTicketData(
+                                queueNumber: queueEntry.queueNumber,
+                                patientName: patient.displayName,
+                                department: queueEntry.department,
+                                doctorName:
+                                    queueEntry.assignedDoctor,
+                                roomName: queueEntry.assignedRoom,
+                                purpose: queueEntry.purpose,
+                                issuedAt: queueEntry.createdAt,
+                              ),
+                              isDark: isDark,
+                            ),
+                            icon: const Icon(Icons.print_rounded,
+                                size: 18, color: AppColors.cyanCalm),
+                            tooltip: 'Print Queue Slip',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          )
+                        else
+                          IconButton(
+                            onPressed: () => context.go(
+                                '/receptionist/checkin?patientId=${patient.id}'),
+                            icon: const Icon(
+                                Icons.add_circle_outline_rounded,
+                                size: 18,
+                                color: AppColors.primary),
+                            tooltip: 'Check In & Queue',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        const SizedBox(width: 6),
+                        Icon(Icons.chevron_right_rounded,
+                            color: subtitleColor, size: 20),
+                      ],
                     ),
-                    onTap: () =>
-                        context.go('/receptionist/patient/${patient.id}'),
+                    onTap: () => context
+                        .go('/receptionist/patient/${patient.id}'),
                   ),
-                ),
-              ),
+                );
+              }),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildQueueStatusBadge(QueueEntry entry, bool isDark) {
+    Color badgeColor;
+    String label;
+    IconData icon;
+
+    switch (entry.status) {
+      case 'serving':
+        badgeColor = AppColors.nowServing;
+        label = '#${entry.queueNumber.split('-').last} Serving';
+        icon = Icons.play_circle_filled_rounded;
+        break;
+      case 'completed':
+        badgeColor = AppColors.success;
+        label = '#${entry.queueNumber.split('-').last} Done';
+        icon = Icons.check_circle_rounded;
+        break;
+      case 'on_hold':
+        badgeColor = AppColors.warning;
+        label = '#${entry.queueNumber.split('-').last} Hold';
+        icon = Icons.pause_circle_filled_rounded;
+        break;
+      default:
+        badgeColor = AppColors.warning;
+        label = '#${entry.queueNumber.split('-').last} Waiting';
+        icon = Icons.access_time_rounded;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: badgeColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: badgeColor),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: TextStyle(
+              color: badgeColor,
+              fontWeight: FontWeight.w800,
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDepartmentQueueDialog(
+      BuildContext context, String deptKey, bool isDark) {
+    final queueProv = context.read<QueueProvider>();
+    final entries = queueProv.getQueue(deptKey);
+    final deptLabel =
+        deptKey == 'ENT' ? 'ENT Department' : 'Eyes (Ophthalmology)';
+    final deptColor =
+        deptKey == 'ENT' ? AppColors.entColor : AppColors.eyesColor;
+
+    final waiting = entries.where((e) => e.isWaiting).toList();
+    final serving = entries.where((e) => e.isServing).toList();
+    final completed = entries.where((e) => e.isCompleted).toList();
+
+    final cardBg = isDark ? AppColors.surfaceMid : AppColors.lightSurface;
+    final borderColor =
+        isDark ? AppColors.surfaceLight : AppColors.lightBorder;
+    final titleColor =
+        isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final subtitleColor =
+        isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor:
+            isDark ? AppColors.surfaceDark : AppColors.lightBg,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        child: ConstrainedBox(
+          constraints:
+              const BoxConstraints(maxWidth: 520, maxHeight: 600),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  gradient: deptKey == 'ENT'
+                      ? AppColors.entGradient
+                      : AppColors.eyesGradient,
+                  borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(20)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.list_alt_rounded,
+                        color: Colors.white, size: 24),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '$deptLabel — Live Queue',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      icon: const Icon(Icons.close_rounded,
+                          color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+              // Summary row
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 18, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildMiniStat('Waiting', waiting.length,
+                        AppColors.warning, isDark),
+                    _buildMiniStat('Serving', serving.length,
+                        AppColors.nowServing, isDark),
+                    _buildMiniStat('Done', completed.length,
+                        AppColors.success, isDark),
+                  ],
+                ),
+              ),
+              Divider(color: borderColor, height: 1),
+              // Queue list
+              if (entries.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      Icon(Icons.hourglass_empty_rounded,
+                          size: 40, color: subtitleColor),
+                      const SizedBox(height: 10),
+                      Text(
+                        'No patients queued yet for $deptLabel today',
+                        style: TextStyle(
+                            color: subtitleColor,
+                            fontWeight: FontWeight.w600),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    itemCount: entries.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(height: 6),
+                    itemBuilder: (_, i) {
+                      final e = entries[i];
+                      Color statusColor;
+                      IconData statusIcon;
+                      switch (e.status) {
+                        case 'serving':
+                          statusColor = AppColors.nowServing;
+                          statusIcon =
+                              Icons.play_circle_filled_rounded;
+                          break;
+                        case 'completed':
+                          statusColor = AppColors.success;
+                          statusIcon =
+                              Icons.check_circle_rounded;
+                          break;
+                        case 'on_hold':
+                          statusColor = Colors.orange;
+                          statusIcon =
+                              Icons.pause_circle_filled_rounded;
+                          break;
+                        default:
+                          statusColor = AppColors.warning;
+                          statusIcon =
+                              Icons.access_time_rounded;
+                      }
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: cardBg,
+                          borderRadius:
+                              BorderRadius.circular(12),
+                          border:
+                              Border.all(color: borderColor),
+                        ),
+                        child: Row(
+                          children: [
+                            // Queue number
+                            Container(
+                              width: 52,
+                              padding:
+                                  const EdgeInsets.symmetric(
+                                      vertical: 6),
+                              decoration: BoxDecoration(
+                                color: deptColor.withValues(
+                                    alpha: 0.12),
+                                borderRadius:
+                                    BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                e.queueNumber
+                                    .split('-')
+                                    .last,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                  color: deptColor,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            // Patient info
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    e.patientName,
+                                    style: TextStyle(
+                                      fontWeight:
+                                          FontWeight.w800,
+                                      color: titleColor,
+                                      fontSize: 13.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${e.assignedDoctor ?? 'No doctor'} • ${e.purpose}',
+                                    style: TextStyle(
+                                      color: subtitleColor,
+                                      fontSize: 11.5,
+                                      fontWeight:
+                                          FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Status
+                            Icon(statusIcon,
+                                size: 18,
+                                color: statusColor),
+                            const SizedBox(width: 6),
+                            Text(
+                              e.status.toUpperCase(),
+                              style: TextStyle(
+                                color: statusColor,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 10.5,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Print
+                            IconButton(
+                              onPressed: () =>
+                                  showQueueTicketPrintDialog(
+                                context,
+                                ticket: QueueTicketData(
+                                  queueNumber:
+                                      e.queueNumber,
+                                  patientName:
+                                      e.patientName,
+                                  department:
+                                      e.department,
+                                  doctorName:
+                                      e.assignedDoctor,
+                                  roomName:
+                                      e.assignedRoom,
+                                  purpose: e.purpose,
+                                  issuedAt:
+                                      e.createdAt,
+                                ),
+                                isDark: isDark,
+                              ),
+                              icon: const Icon(
+                                  Icons.print_rounded,
+                                  size: 16),
+                              tooltip: 'Print Slip',
+                              padding: EdgeInsets.zero,
+                              constraints:
+                                  const BoxConstraints(),
+                              color: AppColors.cyanCalm,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -828,4 +1408,13 @@ class _QuickAction {
     required this.gradient,
     required this.onTap,
   });
+}
+
+class _DeptFilterOption {
+  final String key;
+  final String label;
+  final int count;
+  final Color color;
+
+  _DeptFilterOption(this.key, this.label, this.count, this.color);
 }

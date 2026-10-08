@@ -7,6 +7,7 @@ import '../../data/models/queue_entry.dart';
 import '../../shared/widgets/olof_logo.dart';
 import '../../shared/widgets/tutorial_dialog.dart';
 import '../../providers/theme_provider.dart';
+import '../../core/utils/helpers.dart';
 
 /// Secretary Dashboard — Queue management
 class SecretaryScreen extends StatefulWidget {
@@ -19,6 +20,7 @@ class SecretaryScreen extends StatefulWidget {
 class _SecretaryScreenState extends State<SecretaryScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  String? _selectedDoctorFilter;
 
   @override
   void initState() {
@@ -318,8 +320,21 @@ class _SecretaryScreenState extends State<SecretaryScreen>
 
     return Consumer<QueueProvider>(
       builder: (context, provider, _) {
-        final nowServing = provider.getNowServing(department);
-        final waiting = provider.getWaiting(department);
+        final allDeptWaiting = provider.getWaiting(department);
+        final distinctDocs = <String>{};
+        for (final e in provider.getQueue(department)) {
+          if (e.assignedDoctor != null && e.assignedDoctor!.trim().isNotEmpty) {
+            distinctDocs.add(DoctorHelper.formatName(e.assignedDoctor!));
+          }
+        }
+
+        final selectedDoc = _selectedDoctorFilter;
+        final docWaiting = selectedDoc != null
+            ? provider.getDoctorWaiting(department, selectedDoc)
+            : allDeptWaiting;
+        final docServing = selectedDoc != null
+            ? provider.getDoctorNowServing(department, selectedDoc)
+            : provider.getNowServing(department);
         final completed = provider.getCompleted(department);
         final stats = provider.getStats(department);
 
@@ -333,26 +348,77 @@ class _SecretaryScreenState extends State<SecretaryScreen>
             children: [
               // Stats Row
               _buildStatsRow(context, stats, color, isDark, isCompact),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
+
+              // Doctor Filter Chips (when doctors are queued)
+              if (distinctDocs.isNotEmpty) ...[
+                Text(
+                  'Doctor Queue Filter:',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      ChoiceChip(
+                        label: Text('All Doctors (${allDeptWaiting.length})'),
+                        selected: selectedDoc == null,
+                        onSelected: (_) => setState(() => _selectedDoctorFilter = null),
+                        selectedColor: color.withValues(alpha: 0.2),
+                        labelStyle: TextStyle(
+                          fontWeight: selectedDoc == null ? FontWeight.w800 : FontWeight.w600,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                      ...distinctDocs.map((doc) {
+                        final count = provider.getDoctorWaiting(department, doc).length;
+                        final isSelected = selectedDoc == doc;
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: ChoiceChip(
+                            label: Text('$doc ($count)'),
+                            selected: isSelected,
+                            onSelected: (_) => setState(
+                                () => _selectedDoctorFilter = isSelected ? null : doc),
+                            selectedColor: color.withValues(alpha: 0.2),
+                            labelStyle: TextStyle(
+                              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
 
               // Now Serving
-              _buildNowServing(context, department, nowServing, color, isDark, isCompact),
+              _buildNowServing(context, department, docServing, color, isDark, isCompact),
               const SizedBox(height: 18),
 
               // Call Next Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: waiting.isNotEmpty
-                      ? () => _callNext(department)
+                  onPressed: docWaiting.isNotEmpty
+                      ? () => _callNext(department, doctorName: selectedDoc)
                       : null,
                   icon: const Icon(Icons.campaign_rounded, size: 22),
                   label: Text(
-                    waiting.isNotEmpty
-                        ? 'Call Next Patient (${waiting.first.queueNumber})'
+                    docWaiting.isNotEmpty
+                        ? (selectedDoc != null
+                            ? 'Call Next for $selectedDoc (${docWaiting.first.queueNumber})'
+                            : 'Call Next Patient (${docWaiting.first.queueNumber})')
                         : 'No Patients Waiting in Queue',
                     style: TextStyle(
-                      fontSize: isCompact ? 15.5 : 17,
+                      fontSize: isCompact ? 14.5 : 16.5,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -369,7 +435,9 @@ class _SecretaryScreenState extends State<SecretaryScreen>
 
               // Waiting List
               Text(
-                'Waiting Queue (${waiting.length})',
+                selectedDoc != null
+                    ? 'Waiting for $selectedDoc (${docWaiting.length})'
+                    : 'Waiting Queue (${docWaiting.length})',
                 style: TextStyle(
                   fontSize: 16.5,
                   fontWeight: FontWeight.w800,
@@ -377,10 +445,10 @@ class _SecretaryScreenState extends State<SecretaryScreen>
                 ),
               ),
               const SizedBox(height: 10),
-              if (waiting.isEmpty)
+              if (docWaiting.isEmpty)
                 _buildEmptyState('No patients waiting in queue', Icons.hourglass_empty_rounded, isDark)
               else
-                ...waiting.map(
+                ...docWaiting.map(
                     (e) => _buildQueueCard(context, e, department, color, isDark)),
 
               const SizedBox(height: 22),
@@ -844,10 +912,16 @@ class _SecretaryScreenState extends State<SecretaryScreen>
     );
   }
 
-  Future<void> _callNext(String department) async {
-    await context
-        .read<QueueProvider>()
-        .callNext(department);
+  Future<void> _callNext(String department, {String? doctorName}) async {
+    if (doctorName != null) {
+      await context
+          .read<QueueProvider>()
+          .callDoctorNext(department, doctorName);
+    } else {
+      await context
+          .read<QueueProvider>()
+          .callNext(department);
+    }
   }
 
   Future<void> _markComplete(String entryId) async {

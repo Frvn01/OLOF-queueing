@@ -8,7 +8,11 @@ import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../providers/patient_provider.dart';
 import '../../data/models/patient.dart';
+import '../../data/models/patient_dept_record.dart';
+import '../../data/repositories/patient_dept_repository.dart';
 import '../../shared/widgets/olof_logo.dart';
+import '../../shared/widgets/pmh_medication_dialog.dart';
+import '../../shared/widgets/queue_ticket_print.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/clinic_provider.dart';
 import '../../data/models/doctor.dart';
@@ -69,6 +73,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _pmhMedications = false;
   bool _pmhGlaucoma = false;
   final _pmhOtherController = TextEditingController();
+
+  // Structured medications per condition (populated by medication dialog)
+  final Map<String, List<String>> _pmhConditionMeds = {};
+
+  // Dept record repository
+  final _deptRepo = PatientDeptRepository();
 
   @override
   void dispose() {
@@ -855,25 +865,59 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
     }
 
+    // Helper to toggle a condition and open the medication dialog when checked
+    Future<void> toggleWithMeds(
+      String conditionKey,
+      bool currentValue,
+      ValueSetter<bool> setter,
+    ) async {
+      final newValue = !currentValue;
+      setter(newValue);
+      if (newValue && mounted) {
+        final result = await showPmhMedicationDialog(
+          context,
+          conditionName: conditionKey,
+          existingMeds: _pmhConditionMeds[conditionKey] ?? [],
+          isDark: isDark,
+        );
+        // null = skipped (keep empty), list = saved meds
+        if (result != null) {
+          setState(() => _pmhConditionMeds[conditionKey] = result);
+        }
+      } else if (!newValue) {
+        setState(() => _pmhConditionMeds.remove(conditionKey));
+      }
+    }
+
     final leftItems = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        checkItem('Hypertension', _pmhHypertension, (v) => setState(() => _pmhHypertension = v!), accent: AppColors.urgent),
+        checkItem('Hypertension', _pmhHypertension,
+            (v) => toggleWithMeds('Hypertension', _pmhHypertension, (val) => setState(() => _pmhHypertension = val)),
+            accent: AppColors.urgent),
         const SizedBox(height: 2),
-        checkItem('DM (Diabetes Mellitus)', _pmhDM, (v) => setState(() => _pmhDM = v!), accent: AppColors.warning),
+        checkItem('DM (Diabetes Mellitus)', _pmhDM,
+            (v) => toggleWithMeds('Diabetes Mellitus', _pmhDM, (val) => setState(() => _pmhDM = val)),
+            accent: AppColors.warning),
         const SizedBox(height: 2),
-        checkItem('Allergies', _pmhAllergies, (v) => setState(() => _pmhAllergies = v!), accent: AppColors.onHold),
+        checkItem('Allergies', _pmhAllergies,
+            (v) => toggleWithMeds('Allergies', _pmhAllergies, (val) => setState(() => _pmhAllergies = val)),
+            accent: AppColors.onHold),
       ],
     );
 
     final rightItems = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        checkItem('Operations', _pmhOperations, (v) => setState(() => _pmhOperations = v!)),
+        checkItem('Operations', _pmhOperations,
+            (v) => toggleWithMeds('Operations', _pmhOperations, (val) => setState(() => _pmhOperations = val))),
         const SizedBox(height: 2),
-        checkItem('Medications', _pmhMedications, (v) => setState(() => _pmhMedications = v!)),
+        checkItem('Medications', _pmhMedications,
+            (v) => toggleWithMeds('Medications', _pmhMedications, (val) => setState(() => _pmhMedications = val))),
         const SizedBox(height: 2),
-        checkItem('Glaucoma', _pmhGlaucoma, (v) => setState(() => _pmhGlaucoma = v!), accent: AppColors.cyanCalm),
+        checkItem('Glaucoma', _pmhGlaucoma,
+            (v) => toggleWithMeds('Glaucoma', _pmhGlaucoma, (val) => setState(() => _pmhGlaucoma = val)),
+            accent: AppColors.cyanCalm),
       ],
     );
 
@@ -1706,6 +1750,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
           mainAxisSize: isLandscape ? MainAxisSize.max : MainAxisSize.min,
           children: [
             if (_registeredQueueNumber != null) ...[
+              // Print ticket first
+              ElevatedButton.icon(
+                onPressed: () {
+                  final isDark = context.read<ThemeProvider>().isDarkMode;
+                  final dept = _selectedDoctor != null && _selectedDoctor!.department != 'BOTH'
+                      ? _selectedDoctor!.department
+                      : 'ENT';
+                  showQueueTicketPrintDialog(
+                    context,
+                    isDark: isDark,
+                    ticket: QueueTicketData(
+                      queueNumber: _registeredQueueNumber!,
+                      patientName: patient.displayName,
+                      department: dept,
+                      doctorName: _selectedDoctor?.name,
+                      roomName: _selectedRoom?.name,
+                      purpose: 'Consultation',
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.print_rounded, size: 18),
+                label: const Text('Print Queue Ticket'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 46),
+                  backgroundColor: AppColors.nowServing,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 10),
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () => context.go('/secretary'),
@@ -1843,6 +1916,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ? _historyIllnessController.text.trim()
                     : null,
             pastMedicalHistory: () {
+                // Build a human-readable legacy string for backward compat
                 final parts = <String>[];
                 if (_pmhHypertension) parts.add('Hypertension');
                 if (_pmhDM) parts.add('DM');
@@ -1889,6 +1963,66 @@ class _RegisterScreenState extends State<RegisterScreen> {
         } catch (queueErr) {
           debugPrint('Auto queue addition error: $queueErr');
         }
+      }
+
+      // Save structured department record (ENT or EYES) with medication data
+      final dept = _selectedDoctor != null && _selectedDoctor!.department != 'BOTH'
+          ? _selectedDoctor!.department
+          : 'ENT'; // default to ENT if no doctor selected
+
+      final conditions = <PmhCondition>[];
+      if (_pmhHypertension) {
+        conditions.add(PmhCondition(
+            condition: 'Hypertension',
+            medications: _pmhConditionMeds['Hypertension'] ?? []));
+      }
+      if (_pmhDM) {
+        conditions.add(PmhCondition(
+            condition: 'Diabetes Mellitus',
+            medications: _pmhConditionMeds['Diabetes Mellitus'] ?? []));
+      }
+      if (_pmhAllergies) {
+        conditions.add(PmhCondition(
+            condition: 'Allergies',
+            medications: _pmhConditionMeds['Allergies'] ?? []));
+      }
+      if (_pmhOperations) {
+        conditions.add(PmhCondition(
+            condition: 'Operations',
+            medications: _pmhConditionMeds['Operations'] ?? []));
+      }
+      if (_pmhMedications) {
+        conditions.add(PmhCondition(
+            condition: 'Medications',
+            medications: _pmhConditionMeds['Medications'] ?? []));
+      }
+      if (_pmhGlaucoma) {
+        conditions.add(PmhCondition(
+            condition: 'Glaucoma',
+            medications: _pmhConditionMeds['Glaucoma'] ?? []));
+      }
+
+      try {
+        await _deptRepo.create(
+          patientId: patient.id,
+          department: dept,
+          chiefComplaint: _chiefComplaintController.text.trim().isNotEmpty
+              ? _chiefComplaintController.text.trim()
+              : null,
+          historyOfPresentIllness:
+              _historyIllnessController.text.trim().isNotEmpty
+                  ? _historyIllnessController.text.trim()
+                  : null,
+          pmhConditions: conditions,
+          pastMedicalHistory: _pmhOtherController.text.trim().isNotEmpty
+              ? _pmhOtherController.text.trim()
+              : null,
+          isFirstTime: _isFirstTime,
+          assignedDoctor: _selectedDoctor?.name,
+          assignedRoom: _selectedRoom?.name,
+        );
+      } catch (deptErr) {
+        debugPrint('Dept record save error (non-fatal): $deptErr');
       }
 
       setState(() {

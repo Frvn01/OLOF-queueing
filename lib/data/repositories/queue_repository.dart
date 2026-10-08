@@ -8,7 +8,9 @@ class QueueRepository {
   final List<QueueEntry> _entries = [];
   bool _loaded = false;
   String _lastLoadedDateKey = '';
-  final Map<String, int> _counters = {}; // department -> sequence
+  // Counter key format: 'DEPT::DoctorName::YYYY-MM-DD' for per-doctor numbering
+  // Fallback key: 'DEPT::_nodoc::YYYY-MM-DD' when no doctor assigned
+  final Map<String, int> _counters = {};
 
   bool get isSupabase => SupabaseService.isConfigured;
 
@@ -79,12 +81,65 @@ class QueueRepository {
     return entry;
   }
 
-  /// Get next queue number for a department
-  String getNextQueueNumber(String department) {
+  /// Get next queue number — scoped per-doctor per-day.
+  /// Format: 'ENT-001' uses dept prefix + 3-digit doctor sequence.
+  /// Falls back to department-only numbering when no doctor is provided.
+  String getNextQueueNumber(String department, {String? doctorName}) {
     final today = DateHelper.todayKey();
-    final key = '${department}_$today';
-    _counters[key] = (_counters[key] ?? 0) + 1;
-    return QueueNumberGenerator.generate(department, _counters[key]!);
+    final docKey = (doctorName != null && doctorName.isNotEmpty)
+        ? DoctorHelper.formatName(doctorName)
+        : '_nodoc';
+    final counterKey = '$department::$docKey::$today';
+    _counters[counterKey] = (_counters[counterKey] ?? 0) + 1;
+    final seq = _counters[counterKey]!;
+    return QueueNumberGenerator.generate(department, seq);
+  }
+
+  /// Get the doctor-scoped sequence number (1-based) for the next patient
+  /// of a specific doctor. Used to set doctor_queue_number on the entry.
+  int getNextDoctorSequence(String department, String doctorName) {
+    final today = DateHelper.todayKey();
+    final docKey = DoctorHelper.formatName(doctorName);
+    final counterKey = '$department::$docKey::$today';
+    // Don't increment — just peek at current +1
+    return (_counters[counterKey] ?? 0) + 1;
+  }
+
+  /// Get all queue entries for a specific doctor today.
+  Future<List<QueueEntry>> getDoctorQueue(
+      String department, String doctorName) async {
+    final queue = await getDepartmentQueue(department);
+    return queue
+        .where((e) =>
+            e.assignedDoctor != null &&
+            DoctorHelper.isSameDoctor(e.assignedDoctor, doctorName))
+        .toList();
+  }
+
+  /// Call the next waiting patient for a specific doctor
+  Future<QueueEntry?> callDoctorNext(
+      String department, String doctorName) async {
+    final queue = await getDepartmentQueue(department);
+    final docWaiting = queue
+        .where((e) =>
+            e.isWaiting &&
+            e.assignedDoctor != null &&
+            DoctorHelper.isSameDoctor(e.assignedDoctor, doctorName))
+        .toList();
+    if (docWaiting.isEmpty) return null;
+
+    final next = docWaiting.first;
+    final updated = next.copyWith(
+      status: 'serving',
+      calledAt: DateTime.now(),
+    );
+    return updateEntry(updated);
+  }
+
+  /// Get all currently serving entries for a department (each active doctor may have one)
+  Future<List<QueueEntry>> getServingEntries(String department) async {
+    final queue = await getDepartmentQueue(department);
+    return queue.where((e) => e.isServing).toList();
   }
 
   /// Update a queue entry's status
@@ -245,7 +300,9 @@ class QueueRepository {
   /// Reset today's sequence counter back to zero (001)
   void resetDailyCounters() {
     final today = DateHelper.todayKey();
-    _counters.removeWhere((key, _) => key.endsWith('_$today'));
+    // Remove all counter keys that belong to today (both dept and per-doctor)
+    _counters.removeWhere((key, _) =>
+        key.endsWith('_$today') || key.contains('::$today'));
   }
 
   /// Get archived queue entries filtered by date, department, or search query
@@ -377,15 +434,26 @@ class QueueRepository {
         _entries.removeWhere((e) => e.dateKey == today);
         _entries.addAll(todayEntries);
 
-        // Reset and rebuild counters ONLY for today
-        _counters.removeWhere((key, _) => !key.endsWith('_$today'));
+        // Reset and rebuild counters for today — per-doctor keys
+        _counters.removeWhere(
+            (key, _) => !key.endsWith('_$today') && !key.contains('::$today'));
         for (final entry in todayEntries) {
-          final key = '${entry.department}_$today';
-          final num = int.tryParse(
-                  entry.queueNumber.split('-').last) ??
-              0;
-          if ((_counters[key] ?? 0) < num) {
-            _counters[key] = num;
+          // Per-doctor counter key
+          final docKey = (entry.assignedDoctor != null &&
+                  entry.assignedDoctor!.isNotEmpty)
+              ? DoctorHelper.formatName(entry.assignedDoctor!)
+              : '_nodoc';
+          final perDoctorKey =
+              '${entry.department}::$docKey::$today';
+          final rawNum =
+              int.tryParse(entry.queueNumber.split('-').last) ?? 0;
+          if ((_counters[perDoctorKey] ?? 0) < rawNum) {
+            _counters[perDoctorKey] = rawNum;
+          }
+          // Also keep legacy dept key in sync
+          final legacyKey = '${entry.department}_$today';
+          if ((_counters[legacyKey] ?? 0) < rawNum) {
+            _counters[legacyKey] = rawNum;
           }
         }
         _loaded = true;
