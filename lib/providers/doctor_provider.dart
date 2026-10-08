@@ -4,15 +4,18 @@ import '../core/constants/app_constants.dart';
 import '../data/models/doctor.dart';
 import '../data/models/doctor_schedule.dart';
 import '../data/models/patient.dart';
+import '../data/models/patient_dept_record.dart';
 import '../data/models/queue_entry.dart';
 import '../data/models/visit_record.dart';
 import '../data/repositories/examination_repository.dart';
+import '../data/repositories/patient_dept_repository.dart';
 import '../data/repositories/patient_repository.dart';
 import '../data/repositories/queue_repository.dart';
 
 /// State management for Doctor Mobile / Tablet kiosk module
 class DoctorProvider extends ChangeNotifier {
   final PatientRepository _patientRepo = PatientRepository();
+  final PatientDeptRepository _deptRepo = PatientDeptRepository();
   final QueueRepository _queueRepo = QueueRepository();
   final ExaminationRepository _examRepo = ExaminationRepository();
 
@@ -29,6 +32,8 @@ class DoctorProvider extends ChangeNotifier {
 
   // Consultation state
   Patient? _currentPatient;
+  PatientDeptRecord? _currentDeptRecord;
+  List<PatientDeptRecord> _currentPatientDeptRecords = [];
   QueueEntry? _currentQueueEntry;
   List<Map<String, dynamic>> _currentExaminations = [];
   bool _isLoadingConsultation = false;
@@ -73,6 +78,8 @@ class DoctorProvider extends ChangeNotifier {
   String get bio => _bio;
 
   Patient? get currentPatient => _currentPatient;
+  PatientDeptRecord? get currentDeptRecord => _currentDeptRecord;
+  List<PatientDeptRecord> get currentPatientDeptRecords => List.unmodifiable(_currentPatientDeptRecords);
   QueueEntry? get currentQueueEntry => _currentQueueEntry;
   List<Map<String, dynamic>> get currentExaminations => _currentExaminations;
   bool get isLoadingConsultation => _isLoadingConsultation;
@@ -320,7 +327,7 @@ class DoctorProvider extends ChangeNotifier {
     return doctorQueue.where((e) => e.isCompleted).toList();
   }
 
-  /// Load a patient's consultation data (demographics, complaints, nurse exams & drawings)
+  /// Load a patient's consultation data (demographics, complaints, dept records, nurse exams & drawings)
   Future<void> loadConsultation({
     required String patientId,
     QueueEntry? queueEntry,
@@ -328,6 +335,8 @@ class DoctorProvider extends ChangeNotifier {
     _isLoadingConsultation = true;
     _consultationError = null;
     _currentQueueEntry = queueEntry;
+    _currentDeptRecord = null;
+    _currentPatientDeptRecords = [];
     notifyListeners();
 
     try {
@@ -335,7 +344,25 @@ class DoctorProvider extends ChangeNotifier {
       final patient = await _patientRepo.getPatient(patientId);
       _currentPatient = patient;
 
-      // 2. Fetch all nurse clinical examinations & drawings
+      // 2. Fetch department clinical records (ENT / EYES)
+      try {
+        final allDeptRecords = await _deptRepo.getAllRecords(patientId);
+        _currentPatientDeptRecords = allDeptRecords;
+        final targetDept = (queueEntry?.department ?? _activeDepartment).toUpperCase();
+        try {
+          _currentDeptRecord = allDeptRecords.firstWhere(
+            (r) => r.department.toUpperCase() == targetDept,
+          );
+        } catch (_) {
+          _currentDeptRecord = allDeptRecords.isNotEmpty ? allDeptRecords.first : null;
+        }
+      } catch (deptErr) {
+        debugPrint('DoctorProvider dept records fetch error: $deptErr');
+        _currentDeptRecord = null;
+        _currentPatientDeptRecords = [];
+      }
+
+      // 3. Fetch all nurse clinical examinations & drawings
       final exams = await _examRepo.getGroupedExaminations(patientId);
       _currentExaminations = exams;
 
@@ -346,6 +373,16 @@ class DoctorProvider extends ChangeNotifier {
       _isLoadingConsultation = false;
       notifyListeners();
     }
+  }
+
+  /// Switch the active department record being viewed (e.g. toggle between ENT and EYES tabs)
+  void switchViewedDepartmentRecord(String department) {
+    try {
+      _currentDeptRecord = _currentPatientDeptRecords.firstWhere(
+        (r) => r.department.toUpperCase() == department.toUpperCase(),
+      );
+      notifyListeners();
+    } catch (_) {}
   }
 
   /// Call patient into the doctor's consultation room
@@ -380,7 +417,9 @@ class DoctorProvider extends ChangeNotifier {
         purpose: _currentQueueEntry?.purpose ?? 'Consultation',
         chiefComplaint: _currentPatient?.chiefComplaint,
         diagnosis: diagnosis.trim().isNotEmpty ? diagnosis.trim() : null,
+        assignedDoctor: _activeDoctor,
         notes: [
+          'Doctor: $_activeDoctor',
           if (notes.trim().isNotEmpty) notes.trim(),
           if (prescription != null && prescription.trim().isNotEmpty)
             'Prescription / Rx: ${prescription.trim()}',

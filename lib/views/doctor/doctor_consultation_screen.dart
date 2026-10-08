@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/app_image_helper.dart';
 import '../../data/models/clinical_examination.dart';
 import '../../data/models/patient.dart';
+import '../../data/models/patient_dept_record.dart';
 import '../../data/models/queue_entry.dart';
 import '../../data/models/vital_signs.dart';
 import '../../providers/doctor_provider.dart';
@@ -162,7 +163,12 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
           const SizedBox(height: 16),
 
           // ── 3. CHIEF COMPLAINT / SYMPTOMS / CAUSE OF CONSULTATION ────
-          _buildSymptomsAndComplaintCard(patient, themeColor),
+          _buildSymptomsAndComplaintCard(
+            patient,
+            doctorProv.currentDeptRecord,
+            doctorProv.currentPatientDeptRecords,
+            themeColor,
+          ),
 
           const SizedBox(height: 20),
 
@@ -343,7 +349,50 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
     );
   }
 
-  Widget _buildSymptomsAndComplaintCard(Patient patient, Color themeColor) {
+  IconData _getPmhIcon(String condition) {
+    final c = condition.toLowerCase();
+    if (c.contains('hyper') || c.contains('blood pressure') || c.contains('htn')) return Icons.monitor_heart_rounded;
+    if (c.contains('diabetes') || c.contains('dm') || c.contains('sugar')) return Icons.water_drop_rounded;
+    if (c.contains('allerg')) return Icons.warning_amber_rounded;
+    if (c.contains('glaucoma') || c.contains('eye')) return Icons.visibility_rounded;
+    if (c.contains('operat') || c.contains('surg')) return Icons.local_hospital_rounded;
+    if (c.contains('medic')) return Icons.medication_rounded;
+    return Icons.health_and_safety_rounded;
+  }
+
+  Color _getPmhColor(String condition) {
+    final c = condition.toLowerCase();
+    if (c.contains('hyper') || c.contains('blood pressure') || c.contains('htn')) return const Color(0xFFEF4444);
+    if (c.contains('diabetes') || c.contains('dm') || c.contains('sugar')) return const Color(0xFFF59E0B);
+    if (c.contains('allerg')) return const Color(0xFF8B5CF6);
+    if (c.contains('glaucoma') || c.contains('eye')) return const Color(0xFF06B6D4);
+    if (c.contains('operat') || c.contains('surg')) return const Color(0xFF3B82F6);
+    if (c.contains('medic')) return const Color(0xFF10B981);
+    return const Color(0xFF6366F1);
+  }
+
+  Widget _buildSymptomsAndComplaintCard(
+    Patient patient,
+    PatientDeptRecord? deptRecord,
+    List<PatientDeptRecord> allDeptRecords,
+    Color themeColor,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final doctorProv = context.read<DoctorProvider>();
+    final activeDept = deptRecord?.department ?? widget.queueEntry?.department ?? 'ENT';
+    final complaint = deptRecord?.chiefComplaint?.isNotEmpty == true
+        ? deptRecord!.chiefComplaint!
+        : (patient.chiefComplaint?.isNotEmpty == true ? patient.chiefComplaint! : null);
+    final hpi = deptRecord?.historyOfPresentIllness?.isNotEmpty == true
+        ? deptRecord!.historyOfPresentIllness!
+        : (patient.historyOfPresentIllness?.isNotEmpty == true ? patient.historyOfPresentIllness! : null);
+    final structuredConditions =
+        (deptRecord != null && deptRecord.effectiveConditions.isNotEmpty)
+            ? deptRecord.effectiveConditions
+            : patient.pmhConditionsList;
+    final fallbackPmh =
+        deptRecord?.pastMedicalHistory ?? patient.pastMedicalHistory;
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -359,22 +408,97 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header with department indicator and multi-dept switcher
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.report_problem_rounded, color: themeColor, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  'CAUSE OF CONSULTATION & SYMPTOMS',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                    color: themeColor,
-                    letterSpacing: 0.5,
+                Row(
+                  children: [
+                    Icon(Icons.report_problem_rounded, color: themeColor, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'CAUSE OF CONSULTATION & CLINICAL INTAKE',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: themeColor,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: themeColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    activeDept.toUpperCase(),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                      color: themeColor,
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+
+            // If patient has multiple department records (e.g. ENT & EYES), show tabs
+            if (allDeptRecords.length > 1) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.swap_horiz_rounded, size: 16, color: Colors.grey),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Records Available:',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
+                    ),
+                    const SizedBox(width: 8),
+                    ...allDeptRecords.map((r) {
+                      final isSelected = r.department.toUpperCase() == activeDept.toUpperCase();
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: InkWell(
+                          onTap: () => doctorProv.switchViewedDepartmentRecord(r.department),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? themeColor
+                                  : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              r.department.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: isSelected
+                                    ? Colors.white
+                                    : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 12),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -383,35 +507,145 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: themeColor.withValues(alpha: 0.2)),
               ),
-              child: Text(
-                patient.chiefComplaint?.isNotEmpty == true
-                    ? patient.chiefComplaint!
-                    : 'No specific chief complaint recorded at reception.',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, height: 1.4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    complaint ?? 'No specific chief complaint recorded at reception.',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, height: 1.4),
+                  ),
+                ],
               ),
             ),
-            if (patient.historyOfPresentIllness?.isNotEmpty == true) ...[
-              const SizedBox(height: 10),
+
+            if (hpi != null && hpi.isNotEmpty) ...[
+              const SizedBox(height: 12),
               const Text(
-                'History of Present Illness:',
+                'History of Present Illness (HPI):',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
               ),
               const SizedBox(height: 4),
               Text(
-                patient.historyOfPresentIllness!,
-                style: const TextStyle(fontSize: 13),
+                hpi,
+                style: const TextStyle(fontSize: 13, height: 1.3),
               ),
             ],
-            if (patient.pastMedicalHistory?.isNotEmpty == true) ...[
-              const SizedBox(height: 10),
+
+            // ── STRUCTURED PAST MEDICAL HISTORY & MEDICATIONS ──────
+            if (structuredConditions.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Row(
+                children: [
+                  Icon(Icons.medical_services_outlined, size: 16, color: Colors.grey),
+                  SizedBox(width: 6),
+                  Text(
+                    'PAST MEDICAL HISTORY & MEDICATIONS',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ...structuredConditions.map((cond) {
+                final condColor = _getPmhColor(cond.condition);
+                final condIcon = _getPmhIcon(cond.condition);
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: condColor.withValues(alpha: isDark ? 0.08 : 0.05),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: condColor.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(condIcon, size: 16, color: condColor),
+                          const SizedBox(width: 6),
+                          Text(
+                            cond.condition,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: condColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (cond.medications.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: cond.medications.map((med) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: condColor.withValues(alpha: 0.25)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.medication_rounded, size: 12, color: condColor),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    med,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? Colors.white : Colors.black87,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ] else ...[
+                        const SizedBox(height: 2),
+                        const Text(
+                          'No specific medications recorded',
+                          style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }),
+              if (fallbackPmh != null && fallbackPmh.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Additional PMH notes: $fallbackPmh',
+                  style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey),
+                ),
+              ],
+            ] else if (fallbackPmh != null && fallbackPmh.isNotEmpty) ...[
+              const SizedBox(height: 12),
               const Text(
                 'Past Medical History:',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
               ),
               const SizedBox(height: 4),
-              Text(
-                patient.pastMedicalHistory!,
-                style: const TextStyle(fontSize: 13),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                ),
+                child: Text(
+                  fallbackPmh,
+                  style: const TextStyle(fontSize: 13),
+                ),
               ),
             ],
           ],

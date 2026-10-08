@@ -22,6 +22,80 @@ class PmhCondition {
         condition: condition ?? this.condition,
         medications: medications ?? this.medications,
       );
+
+  /// Formats a list of PmhCondition objects (and optional free-text other)
+  /// into a structured string suitable for saving to patients.past_medical_history.
+  /// Example: "Hypertension (Amlodipine, Losartan); DM (Metformin); Allergies"
+  static String formatList(List<PmhCondition> conditions, [String? other]) {
+    final parts = <String>[];
+    for (final c in conditions) {
+      if (c.condition.trim().isEmpty) continue;
+      if (c.medications.isNotEmpty) {
+        parts.add('${c.condition} (${c.medications.join(', ')})');
+      } else {
+        parts.add(c.condition);
+      }
+    }
+    if (other != null && other.trim().isNotEmpty) {
+      parts.add(other.trim());
+    }
+    return parts.join('; ');
+  }
+
+  /// Parses a past-medical-history string into a `List<PmhCondition>`.
+  /// Handles semicolon-separated, newline-separated, or comma-separated lists,
+  /// with or without parenthesized medication names.
+  static List<PmhCondition> parseFromText(String? text) {
+    if (text == null || text.trim().isEmpty) return [];
+
+    final raw = text.trim();
+    final tokens = <String>[];
+    final buffer = StringBuffer();
+    int parenDepth = 0;
+    final primaryDelimiter = raw.contains(';') ? ';' : (raw.contains('\n') ? '\n' : ',');
+
+    for (int i = 0; i < raw.length; i++) {
+      final char = raw[i];
+      if (char == '(') {
+        parenDepth++;
+        buffer.write(char);
+      } else if (char == ')') {
+        if (parenDepth > 0) parenDepth--;
+        buffer.write(char);
+      } else if (char == primaryDelimiter && parenDepth == 0) {
+        final t = buffer.toString().trim();
+        if (t.isNotEmpty) tokens.add(t);
+        buffer.clear();
+      } else {
+        buffer.write(char);
+      }
+    }
+    final remaining = buffer.toString().trim();
+    if (remaining.isNotEmpty) tokens.add(remaining);
+
+    final results = <PmhCondition>[];
+    for (var part in tokens) {
+      part = part.trim();
+      if (part.isEmpty) continue;
+
+      final parenMatch = RegExp(r'^(.*?)\s*\((.*?)\)$').firstMatch(part);
+      if (parenMatch != null) {
+        final condName = parenMatch.group(1)?.trim() ?? '';
+        final medsStr = parenMatch.group(2)?.trim() ?? '';
+        final meds = medsStr
+            .split(',')
+            .map((m) => m.trim())
+            .where((m) => m.isNotEmpty)
+            .toList();
+        if (condName.isNotEmpty) {
+          results.add(PmhCondition(condition: condName, medications: meds));
+        }
+      } else {
+        results.add(PmhCondition(condition: part, medications: const []));
+      }
+    }
+    return results;
+  }
 }
 
 /// Department-scoped clinical record for a patient (one per ENT, one per EYES).
@@ -74,14 +148,25 @@ class PatientDeptRecord {
     return parts.join(' | ');
   }
 
+  /// Returns pmhConditions if present, otherwise parses pastMedicalHistory.
+  List<PmhCondition> get effectiveConditions {
+    if (pmhConditions.isNotEmpty) return pmhConditions;
+    if (pastMedicalHistory != null && pastMedicalHistory!.isNotEmpty) {
+      return PmhCondition.parseFromText(pastMedicalHistory);
+    }
+    return const [];
+  }
+
   /// True if a condition name is active in pmhConditions.
   bool hasCondition(String condition) =>
-      pmhConditions.any((c) => c.condition == condition);
+      effectiveConditions.any((c) => c.condition == condition);
 
   /// Get medications for a specific condition (empty list if not found).
   List<String> medicationsFor(String condition) {
     try {
-      return pmhConditions.firstWhere((c) => c.condition == condition).medications;
+      return effectiveConditions
+          .firstWhere((c) => c.condition.toLowerCase() == condition.toLowerCase())
+          .medications;
     } catch (_) {
       return [];
     }

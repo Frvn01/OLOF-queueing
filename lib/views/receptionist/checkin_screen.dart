@@ -6,6 +6,8 @@ import '../../core/constants/app_constants.dart';
 import '../../providers/patient_provider.dart';
 import '../../providers/queue_provider.dart';
 import '../../data/models/patient.dart';
+import '../../data/models/patient_dept_record.dart';
+import '../../data/repositories/patient_dept_repository.dart';
 import '../../shared/widgets/qr_scanner_dialog.dart';
 import '../../shared/widgets/olof_logo.dart';
 import '../../providers/theme_provider.dart';
@@ -14,7 +16,8 @@ import '../../data/models/doctor.dart';
 import '../../data/models/clinic_room.dart';
 import '../../shared/widgets/searchable_picker_dialog.dart';
 import '../../shared/widgets/queue_ticket_print.dart';
-import 'widgets/clinic_management_dialog.dart';
+import '../../data/models/visit_record.dart';
+import '../../core/utils/helpers.dart';
 
 /// Check-in screen — select department and purpose, then join queue
 class CheckinScreen extends StatefulWidget {
@@ -36,6 +39,7 @@ class CheckinScreen extends StatefulWidget {
 }
 
 class _CheckinScreenState extends State<CheckinScreen> {
+  final PatientDeptRepository _deptRepo = PatientDeptRepository();
   Patient? _patient;
   String? _selectedDepartment;
   String? _selectedPurpose;
@@ -44,6 +48,11 @@ class _CheckinScreenState extends State<CheckinScreen> {
   bool _isLoading = true;
   bool _isSubmitting = false;
   String? _assignedQueueNumber;
+
+  // Cross-department records state
+  List<PatientDeptRecord> _patientDeptRecords = [];
+  PatientDeptRecord? _activeDeptRecord;
+  bool _isFirstVisitToSelectedDept = false;
 
   // For QR / manual lookup
   final _patientNoController = TextEditingController();
@@ -125,11 +134,40 @@ class _CheckinScreenState extends State<CheckinScreen> {
     _selectedPurpose ??= 'Consultation';
   }
 
+  Future<void> _loadDeptRecordsForPatient(String patientId) async {
+    try {
+      final records = await _deptRepo.getAllRecords(patientId);
+      _patientDeptRecords = records;
+      if (_selectedDepartment != null) {
+        _checkDeptStatus(_selectedDepartment!);
+      }
+    } catch (_) {}
+  }
+
+  void _checkDeptStatus(String dept) {
+    try {
+      final match = _patientDeptRecords.firstWhere(
+        (r) => r.department.toUpperCase() == dept.toUpperCase(),
+      );
+      _activeDeptRecord = match;
+      _isFirstVisitToSelectedDept = false;
+      if (match.chiefComplaint != null && match.chiefComplaint!.isNotEmpty) {
+        _chiefComplaintController.text = match.chiefComplaint!;
+      }
+    } catch (_) {
+      _activeDeptRecord = null;
+      _isFirstVisitToSelectedDept = _patientDeptRecords.isNotEmpty;
+      _chiefComplaintController.clear();
+    }
+    setState(() {});
+  }
+
   Future<void> _loadPatient(String id) async {
     final patient =
         await context.read<PatientProvider>().getPatientById(id);
     if (patient != null) {
       _applyPatientDefaults(patient);
+      await _loadDeptRecordsForPatient(patient.id);
     }
     setState(() {
       _patient = patient;
@@ -145,6 +183,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
         await context.read<PatientProvider>().getPatientByNo(no);
     if (patient != null) {
       _applyPatientDefaults(patient);
+      await _loadDeptRecordsForPatient(patient.id);
     }
     setState(() {
       _patient = patient;
@@ -504,6 +543,61 @@ class _CheckinScreenState extends State<CheckinScreen> {
               ),
               const SizedBox(height: 20),
 
+              // First visit notice or existing record indicator
+              if (_isFirstVisitToSelectedDept && _selectedDepartment != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF8B5CF6).withValues(alpha: isDark ? 0.15 : 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.stars_rounded, color: Color(0xFF8B5CF6), size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'First visit to $_selectedDepartment Clinic! Prior medical history & profile are linked. Please enter Chief Complaint for $_selectedDepartment.',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.purple.shade200 : const Color(0xFF7C3AED),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else if (_activeDeptRecord != null && _selectedDepartment != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D9488).withValues(alpha: isDark ? 0.15 : 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.25)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF0D9488), size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Existing $_selectedDepartment clinical record found. You can adjust the symptoms for today’s visit.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.teal.shade200 : const Color(0xFF0F766E),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
               // Chief Complaint (Directly visible at Nurse Station)
               Row(
                 children: [
@@ -548,27 +642,13 @@ class _CheckinScreenState extends State<CheckinScreen> {
               const SizedBox(height: 24),
 
               // Doctor & Room Selection (Optional)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Assign Doctor & Room (Optional)',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: titleColor,
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: () => showClinicManagementDialog(context, isDark: isDark),
-                    icon: const Icon(Icons.settings_rounded, size: 15),
-                    label: const Text('Setup'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ],
+              Text(
+                'Assign Doctor & Room (Optional)',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: titleColor,
+                ),
               ),
               const SizedBox(height: 10),
 
@@ -643,8 +723,6 @@ class _CheckinScreenState extends State<CheckinScreen> {
                 items: items,
                 selectedValue: _selectedDoctor,
                 isDark: isDark,
-                addNewLabel: '+ Add Doctor',
-                onAddNew: () => showClinicManagementDialog(context, isDark: isDark, initialTab: 0),
               );
 
               setState(() {
@@ -760,8 +838,6 @@ class _CheckinScreenState extends State<CheckinScreen> {
                 items: items,
                 selectedValue: _selectedRoom,
                 isDark: isDark,
-                addNewLabel: '+ Add Room',
-                onAddNew: () => showClinicManagementDialog(context, isDark: isDark, initialTab: 1),
               );
 
               setState(() => _selectedRoom = picked);
@@ -846,7 +922,10 @@ class _CheckinScreenState extends State<CheckinScreen> {
     final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
 
     return InkWell(
-      onTap: () => setState(() => _selectedDepartment = dept),
+      onTap: () {
+        setState(() => _selectedDepartment = dept);
+        _checkDeptStatus(dept);
+      },
       borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -1077,6 +1156,38 @@ class _CheckinScreenState extends State<CheckinScreen> {
         }
       }
 
+      // Sync or create department clinical record (patient_dept_records)
+      try {
+        final existingDeptRec = _activeDeptRecord ??
+            await _deptRepo.getRecord(_patient!.id, _selectedDepartment!);
+        if (existingDeptRec != null) {
+          await _deptRepo.upsert(
+            existingDeptRec.copyWith(
+              chiefComplaint: enteredComplaint.isNotEmpty ? enteredComplaint : existingDeptRec.chiefComplaint,
+              assignedDoctor: doctorName,
+              assignedRoom: roomName,
+            ),
+          );
+        } else {
+          // Brand-new department record for cross-department visit, carrying over structured PMH
+          final priorConditions = _patientDeptRecords.isNotEmpty
+              ? _patientDeptRecords.first.effectiveConditions
+              : _patient!.pmhConditionsList;
+          await _deptRepo.create(
+            patientId: _patient!.id,
+            department: _selectedDepartment!,
+            chiefComplaint: enteredComplaint.isNotEmpty ? enteredComplaint : null,
+            pastMedicalHistory: _patient!.pastMedicalHistory,
+            pmhConditions: priorConditions,
+            isFirstTime: true,
+            assignedDoctor: doctorName,
+            assignedRoom: roomName,
+          );
+        }
+      } catch (deptErr) {
+        debugPrint('Notice: could not upsert dept record during checkin: $deptErr');
+      }
+
       if (!mounted) return;
 
       final entry = await queueProv.addToQueue(
@@ -1088,6 +1199,29 @@ class _CheckinScreenState extends State<CheckinScreen> {
             doctor: doctorName,
             room: roomName,
           );
+
+      // Record visit history for this check-in
+      try {
+        final visitRecord = VisitRecord(
+          id: IdGenerator.generateUuid(),
+          patientId: _patient!.id,
+          department: _selectedDepartment!,
+          purpose: _selectedPurpose!,
+          chiefComplaint: enteredComplaint.isNotEmpty ? enteredComplaint : null,
+          assignedDoctor: doctorName,
+          assignedRoom: roomName,
+          notes: [
+            'Checked in at reception.',
+            if (doctorName != null) 'Doctor: $doctorName',
+            if (roomName != null) 'Room: $roomName',
+          ].join(' • '),
+          queueNumber: entry.queueNumber,
+          visitDate: DateTime.now(),
+        );
+        await patientProv.addVisitRecord(visitRecord);
+      } catch (visitErr) {
+        debugPrint('Visit record save error on checkin (non-fatal): $visitErr');
+      }
 
       setState(() {
         _assignedQueueNumber = entry.queueNumber;

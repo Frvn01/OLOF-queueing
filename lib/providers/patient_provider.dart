@@ -51,17 +51,21 @@ class PatientProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Select a patient for viewing — loads patient data immediately, then
-  /// fetches fresh visit history directly from Supabase in the background.
+  /// Select a patient for viewing — loads cached data immediately, then
+  /// fetches fresh patient record and visit history directly from Supabase.
   Future<void> selectPatient(String patientId) async {
-    // Step 1: load the patient record and show what we have in cache first.
+    // Step 1: load cached patient and visits first for instantaneous response.
     _selectedPatient = await _repo.getPatient(patientId);
     _selectedPatientVisits = await _repo.getVisitHistory(patientId);
     _visitsLoading = true;
     notifyListeners();
 
-    // Step 2: fetch fresh visits from Supabase (bypasses stale cache).
+    // Step 2: fetch fresh patient & visits from Supabase (bypasses stale cache).
     try {
+      final freshPatient = await _repo.fetchPatient(patientId);
+      if (freshPatient != null) {
+        _selectedPatient = freshPatient;
+      }
       _selectedPatientVisits = await _repo.fetchVisitHistory(patientId);
     } catch (_) {
       // Keep whatever the cache already provided.

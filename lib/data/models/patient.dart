@@ -1,4 +1,5 @@
 import 'vital_signs.dart';
+import 'patient_dept_record.dart';
 
 /// Patient data model
 class Patient {
@@ -63,6 +64,10 @@ class Patient {
     }
     return a;
   }
+
+  /// Structured past medical history conditions and medications parsed from pastMedicalHistory.
+  List<PmhCondition> get pmhConditionsList =>
+      PmhCondition.parseFromText(pastMedicalHistory);
 
   Map<String, dynamic> toJson() => {
         'id': id,

@@ -97,6 +97,9 @@ class _QrLoginScreenState extends State<QrLoginScreen>
 
   // ── QR resolved ────────────────────────────────────────────────────────────
 
+  bool get _isStrictSuperAdmin =>
+      widget.roleHint == 'super_admin' || widget.roleHint == 'admin';
+
   void _handleQrDetect(BarcodeCapture capture) {
     if (_processingQr) return;
     final raw = capture.barcodes.firstOrNull?.rawValue;
@@ -125,8 +128,37 @@ class _QrLoginScreenState extends State<QrLoginScreen>
       return;
     }
 
-    // Super Admin: Prompt destination department picker
-    if (staff.role == 'super_admin') {
+    final isSuperAdmin =
+        staff.role == 'super_admin' || staff.role == 'superadmin';
+
+    // Strict Admin Workstation Authorization: Only Master Super Admin QR allowed!
+    if (_isStrictSuperAdmin) {
+      if (!isSuperAdmin) {
+        _shakeCtrl.forward(from: 0);
+        setState(() {
+          _errorMessage =
+              'Access Denied: ${staff.name} (${staff.role.toUpperCase()}) is not authorized. Only the Master Super Administrator QR badge can unlock the Admin Workstation.';
+          _processingQr = false;
+        });
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() => _errorMessage = null);
+            _scannerCtrl?.start();
+            if (_isDesktop) _barcodeFocus.requestFocus();
+          }
+        });
+        return;
+      }
+
+      // Master Super Admin verified! Navigate directly to Admin Operations
+      if (mounted) {
+        context.go('/admin');
+      }
+      return;
+    }
+
+    // General QR flow (when not restricted to Admin Workstation)
+    if (isSuperAdmin) {
       await showSuperAdminDepartmentPicker(context, adminName: staff.name);
       if (mounted) {
         setState(() => _processingQr = false);
@@ -230,7 +262,9 @@ class _QrLoginScreenState extends State<QrLoginScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Staff QR Authentication',
+                  _isStrictSuperAdmin
+                      ? 'Admin Workstation Access'
+                      : 'Staff QR Authentication',
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
@@ -240,9 +274,11 @@ class _QrLoginScreenState extends State<QrLoginScreen>
                   ),
                 ),
                 Text(
-                  widget.roleHint != null
-                      ? 'Scan Staff QR badge to access ${widget.roleHint} station'
-                      : 'Scan your Staff QR badge for authorized access',
+                  _isStrictSuperAdmin
+                      ? 'Master Super Administrator QR badge required'
+                      : (widget.roleHint != null
+                          ? 'Scan Staff QR badge to access ${widget.roleHint} station'
+                          : 'Scan your Staff QR badge for authorized access'),
                   style: TextStyle(
                     fontSize: 12,
                     color: isDark
@@ -293,18 +329,35 @@ class _QrLoginScreenState extends State<QrLoginScreen>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.08),
+            color: (_isStrictSuperAdmin
+                    ? const Color(0xFFD97706)
+                    : AppColors.primary)
+                .withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+            border: Border.all(
+              color: (_isStrictSuperAdmin
+                      ? const Color(0xFFD97706)
+                      : AppColors.primary)
+                  .withValues(alpha: 0.25),
+            ),
           ),
           child: Row(
             children: [
-              const Icon(Icons.qr_code_2_rounded,
-                  color: AppColors.primary, size: 28),
+              Icon(
+                _isStrictSuperAdmin
+                    ? Icons.shield_rounded
+                    : Icons.qr_code_2_rounded,
+                color: _isStrictSuperAdmin
+                    ? const Color(0xFFD97706)
+                    : AppColors.primary,
+                size: 28,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Present your physical Staff QR badge to the camera or barcode scanner.',
+                  _isStrictSuperAdmin
+                      ? 'Restricted Access: Only the Master Super Administrator QR badge is accepted. All other badges will be rejected.'
+                      : 'Present your physical Staff QR badge to the camera or barcode scanner.',
                   style: TextStyle(
                     color: isDark
                         ? AppColors.textPrimary
@@ -458,8 +511,11 @@ class _QrLoginScreenState extends State<QrLoginScreen>
 
         const SizedBox(height: 12),
 
+        // Security policy note
         Text(
-          'Security Policy: Only verified Staff QR credentials will unlock clinical stations.',
+          _isStrictSuperAdmin
+              ? 'Admin Policy: Only verified Master Super Administrator QR credentials will unlock this workstation.'
+              : 'Security Policy: Only verified Staff QR credentials will unlock clinical stations.',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 11,

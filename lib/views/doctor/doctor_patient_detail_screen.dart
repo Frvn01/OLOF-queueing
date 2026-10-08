@@ -4,8 +4,10 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/app_image_helper.dart';
 import '../../data/models/clinical_examination.dart';
 import '../../data/models/patient.dart';
+import '../../data/models/patient_dept_record.dart';
 import '../../data/models/visit_record.dart';
 import '../../data/repositories/examination_repository.dart';
+import '../../data/repositories/patient_dept_repository.dart';
 import '../../data/repositories/patient_repository.dart';
 
 class DoctorPatientDetailScreen extends StatefulWidget {
@@ -21,12 +23,14 @@ class DoctorPatientDetailScreen extends StatefulWidget {
 class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen>
     with SingleTickerProviderStateMixin {
   final PatientRepository _patientRepo = PatientRepository();
+  final PatientDeptRepository _deptRepo = PatientDeptRepository();
   final ExaminationRepository _examRepo = ExaminationRepository();
 
   late TabController _tabController;
   Patient? _patient;
   List<VisitRecord> _visits = [];
   List<Map<String, dynamic>> _exams = [];
+  List<PatientDeptRecord> _deptRecords = [];
   bool _isLoading = true;
   String? _error;
 
@@ -53,12 +57,14 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen>
       final p = await _patientRepo.getPatient(widget.patientId);
       final v = await _patientRepo.fetchVisitHistory(widget.patientId);
       final e = await _examRepo.getGroupedExaminations(widget.patientId);
+      final d = await _deptRepo.getAllRecords(widget.patientId);
 
       if (mounted) {
         setState(() {
           _patient = p;
           _visits = v;
           _exams = e;
+          _deptRecords = d;
           _isLoading = false;
         });
       }
@@ -299,9 +305,85 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen>
                         ],
                       ),
                       const Divider(height: 24),
-                      _buildDetailRow('Chief Complaint / Symptoms', p.chiefComplaint ?? 'None specified'),
-                      _buildDetailRow('History of Present Illness', p.historyOfPresentIllness ?? 'None specified'),
-                      _buildDetailRow('Past Medical History', p.pastMedicalHistory ?? 'None specified'),
+                      if (_deptRecords.isNotEmpty) ...[
+                        ..._deptRecords.map((dr) => _buildDeptRecordCard(dr)),
+                      ] else ...[
+                        _buildDetailRow('Chief Complaint / Symptoms', p.chiefComplaint ?? 'None specified'),
+                        _buildDetailRow('History of Present Illness', p.historyOfPresentIllness ?? 'None specified'),
+                        if (p.pmhConditionsList.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text(
+                              'Past Medical History & Medications:',
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          ...p.pmhConditionsList.map((cond) {
+                            final isDark = Theme.of(context).brightness == Brightness.dark;
+                            final condColor = _getPmhColor(cond.condition);
+                            final condIcon = _getPmhIcon(cond.condition);
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: condColor.withValues(alpha: isDark ? 0.12 : 0.06),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: condColor.withValues(alpha: 0.25)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(condIcon, size: 14, color: condColor),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        cond.condition,
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: condColor),
+                                      ),
+                                    ],
+                                  ),
+                                  if (cond.medications.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Wrap(
+                                      spacing: 4,
+                                      runSpacing: 4,
+                                      children: cond.medications.map((m) {
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: condColor.withValues(alpha: 0.2)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.medication_rounded, size: 10, color: condColor),
+                                              const SizedBox(width: 3),
+                                              Text(
+                                                m,
+                                                style: TextStyle(
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isDark ? Colors.white : Colors.black87,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            );
+                          }),
+                        ] else
+                          _buildDetailRow('Past Medical History', p.pastMedicalHistory ?? 'None specified'),
+                      ],
+                      const Divider(height: 24),
                       _buildDetailRow('Contact Phone Number', p.contactNumber.isNotEmpty ? p.contactNumber : 'N/A'),
                       _buildDetailRow('Home Address', p.address.isNotEmpty ? p.address : 'N/A'),
                       _buildDetailRow('Occupation', p.occupation ?? 'N/A'),
@@ -722,6 +804,149 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen>
           Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
           const SizedBox(height: 2),
           Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  IconData _getPmhIcon(String condition) {
+    final c = condition.toLowerCase();
+    if (c.contains('hyper') || c.contains('blood pressure') || c.contains('htn')) return Icons.monitor_heart_rounded;
+    if (c.contains('diabetes') || c.contains('dm') || c.contains('sugar')) return Icons.water_drop_rounded;
+    if (c.contains('allerg')) return Icons.warning_amber_rounded;
+    if (c.contains('glaucoma') || c.contains('eye')) return Icons.visibility_rounded;
+    if (c.contains('operat') || c.contains('surg')) return Icons.local_hospital_rounded;
+    if (c.contains('medic')) return Icons.medication_rounded;
+    return Icons.health_and_safety_rounded;
+  }
+
+  Color _getPmhColor(String condition) {
+    final c = condition.toLowerCase();
+    if (c.contains('hyper') || c.contains('blood pressure') || c.contains('htn')) return const Color(0xFFEF4444);
+    if (c.contains('diabetes') || c.contains('dm') || c.contains('sugar')) return const Color(0xFFF59E0B);
+    if (c.contains('allerg')) return const Color(0xFF8B5CF6);
+    if (c.contains('glaucoma') || c.contains('eye')) return const Color(0xFF06B6D4);
+    if (c.contains('operat') || c.contains('surg')) return const Color(0xFF3B82F6);
+    if (c.contains('medic')) return const Color(0xFF10B981);
+    return const Color(0xFF6366F1);
+  }
+
+  Widget _buildDeptRecordCard(PatientDeptRecord dr) {
+    final isEyes = dr.department.toUpperCase() == 'EYES';
+    final deptColor = isEyes ? AppColors.cyanCalm : AppColors.brandBlue;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: deptColor.withValues(alpha: isDark ? 0.08 : 0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: deptColor.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: deptColor,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${dr.department.toUpperCase()} CLINICAL RECORD',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              if (dr.assignedDoctor != null && dr.assignedDoctor!.isNotEmpty)
+                Text(
+                  'Doctor: ${dr.assignedDoctor}',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _buildDetailRow('Chief Complaint / Symptoms', dr.chiefComplaint ?? 'None recorded'),
+          if (dr.historyOfPresentIllness != null && dr.historyOfPresentIllness!.isNotEmpty)
+            _buildDetailRow('History of Present Illness', dr.historyOfPresentIllness!),
+
+          if (dr.effectiveConditions.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                'Past Medical History & Medications:',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w600),
+              ),
+            ),
+            ...dr.effectiveConditions.map((cond) {
+              final condColor = _getPmhColor(cond.condition);
+              final condIcon = _getPmhIcon(cond.condition);
+              return Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: condColor.withValues(alpha: isDark ? 0.12 : 0.06),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: condColor.withValues(alpha: 0.25)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(condIcon, size: 14, color: condColor),
+                        const SizedBox(width: 6),
+                        Text(
+                          cond.condition,
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: condColor),
+                        ),
+                      ],
+                    ),
+                    if (cond.medications.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: cond.medications.map((m) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: condColor.withValues(alpha: 0.2)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.medication_rounded, size: 10, color: condColor),
+                                const SizedBox(width: 3),
+                                Text(
+                                  m,
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? Colors.white : Colors.black87,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
+          ] else if (dr.pastMedicalHistory != null && dr.pastMedicalHistory!.isNotEmpty)
+            _buildDetailRow('Past Medical History', dr.pastMedicalHistory!),
         ],
       ),
     );

@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/patient_dept_record.dart';
 import '../services/supabase_service.dart';
 import '../../core/utils/helpers.dart';
@@ -6,8 +8,41 @@ import '../../core/utils/helpers.dart';
 /// CRUD for department-scoped patient records (patient_dept_records table).
 /// Each patient can have at most one record per department (ENT / EYES).
 class PatientDeptRepository {
-  // In-memory cache: key = 'patientId::DEPT'
-  final Map<String, PatientDeptRecord> _cache = {};
+  // Static in-memory cache shared across all screens & repository instances: key = 'patientId::DEPT'
+  static final Map<String, PatientDeptRecord> _cache = {};
+  static bool _prefsLoaded = false;
+  static const _storageKey = 'local_patient_dept_records_v1';
+
+  static Future<void> _ensureLoaded() async {
+    if (_prefsLoaded) return;
+    _prefsLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_storageKey);
+      if (raw != null) {
+        final Map<String, dynamic> decoded = jsonDecode(raw);
+        decoded.forEach((key, val) {
+          if (val is Map) {
+            _cache[key] =
+                PatientDeptRecord.fromJson(Map<String, dynamic>.from(val));
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('PatientDeptRepo load error: $e');
+    }
+  }
+
+  static Future<void> _persistCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final map = <String, dynamic>{};
+      _cache.forEach((k, v) => map[k] = v.toJson());
+      await prefs.setString(_storageKey, jsonEncode(map));
+    } catch (e) {
+      debugPrint('PatientDeptRepo persist error: $e');
+    }
+  }
 
   bool get isSupabase => SupabaseService.isConfigured;
 
@@ -16,6 +51,7 @@ class PatientDeptRepository {
   /// Fetch the dept record for a patient, or null if not yet created.
   Future<PatientDeptRecord?> getRecord(
       String patientId, String department) async {
+    await _ensureLoaded();
     final cacheKey = '$patientId::$department';
     if (_cache.containsKey(cacheKey)) return _cache[cacheKey];
 
@@ -43,6 +79,7 @@ class PatientDeptRepository {
 
   /// Fetch all dept records for a patient (e.g. to show ENT + EYES tabs).
   Future<List<PatientDeptRecord>> getAllRecords(String patientId) async {
+    await _ensureLoaded();
     final results = <PatientDeptRecord>[];
 
     if (isSupabase) {
@@ -78,6 +115,7 @@ class PatientDeptRepository {
 
   /// Insert or update a dept record (upsert on patient_id + department).
   Future<PatientDeptRecord> upsert(PatientDeptRecord record) async {
+    await _ensureLoaded();
     final cacheKey = '${record.patientId}::${record.department}';
 
     if (isSupabase) {
@@ -92,6 +130,7 @@ class PatientDeptRepository {
         final saved =
             PatientDeptRecord.fromJson(Map<String, dynamic>.from(result));
         _cache[cacheKey] = saved;
+        await _persistCache();
         return saved;
       } catch (e) {
         debugPrint('PatientDeptRepo upsert error: $e');
@@ -115,6 +154,7 @@ class PatientDeptRepository {
     }
 
     _cache[cacheKey] = record;
+    await _persistCache();
     return record;
   }
 

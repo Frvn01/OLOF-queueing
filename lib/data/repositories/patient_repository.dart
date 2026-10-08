@@ -22,7 +22,7 @@ class PatientRepository {
     return List.unmodifiable(_patients);
   }
 
-  /// Get a single patient by ID
+  /// Get a single patient by ID (from in-memory cache)
   Future<Patient?> getPatient(String id) async {
     if (!_loaded) await _loadFromStorage();
     try {
@@ -30,6 +30,33 @@ class PatientRepository {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Fetch a single patient by ID directly from Supabase (bypasses stale cache)
+  Future<Patient?> fetchPatient(String id) async {
+    if (isSupabase) {
+      try {
+        final data = await SupabaseService.client
+            .from('patients')
+            .select()
+            .eq('id', id)
+            .maybeSingle();
+        if (data != null) {
+          final p = Patient.fromJson(Map<String, dynamic>.from(data as Map));
+          final idx = _patients.indexWhere((x) => x.id == id);
+          if (idx >= 0) {
+            _patients[idx] = p;
+          } else {
+            _patients.add(p);
+          }
+          await _saveToStorage();
+          return p;
+        }
+      } catch (e) {
+        debugPrint('Supabase fetchPatient error: $e');
+      }
+    }
+    return getPatient(id);
   }
 
   /// Get patient by patient number

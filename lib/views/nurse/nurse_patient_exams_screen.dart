@@ -7,6 +7,8 @@ import '../../providers/nurse_provider.dart';
 import '../../providers/theme_provider.dart';
 
 import '../../data/models/patient.dart';
+import '../../data/models/patient_dept_record.dart';
+import '../../data/repositories/patient_dept_repository.dart';
 import '../../providers/patient_provider.dart';
 
 /// Patient Exams & Clinical Diagram History Screen
@@ -41,12 +43,26 @@ class NursePatientExamsScreen extends StatefulWidget {
 }
 
 class _NursePatientExamsScreenState extends State<NursePatientExamsScreen> {
+  final PatientDeptRepository _deptRepo = PatientDeptRepository();
+  PatientDeptRecord? _deptRecord;
+
   @override
   void initState() {
     super.initState();
+    _loadDeptRecord();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<NurseProvider>().loadExaminationsForPatient(widget.patientId);
     });
+  }
+
+  Future<void> _loadDeptRecord() async {
+    try {
+      final dept = widget.department ?? 'ENT';
+      final rec = await _deptRepo.getRecord(widget.patientId, dept);
+      if (mounted) {
+        setState(() => _deptRecord = rec);
+      }
+    } catch (_) {}
   }
 
   void _createNewExam(
@@ -64,9 +80,9 @@ class _NursePatientExamsScreenState extends State<NursePatientExamsScreen> {
         'department': widget.department ?? 'ENT',
         'queueNumber': widget.queueNumber,
         'queueEntryId': widget.queueEntryId,
-        'chiefComplaint': chiefComplaint ?? widget.chiefComplaint,
-        'historyOfPresentIllness': hpi ?? widget.historyOfPresentIllness,
-        'pastMedicalHistory': pmh ?? widget.pastMedicalHistory,
+        'chiefComplaint': chiefComplaint ?? _deptRecord?.chiefComplaint ?? widget.chiefComplaint,
+        'historyOfPresentIllness': hpi ?? _deptRecord?.historyOfPresentIllness ?? widget.historyOfPresentIllness,
+        'pastMedicalHistory': pmh ?? _deptRecord?.pmhSummaryText ?? widget.pastMedicalHistory,
       },
     );
     if (mounted) {
@@ -87,9 +103,9 @@ class _NursePatientExamsScreenState extends State<NursePatientExamsScreen> {
         'viewMode': viewMode,
         'queueNumber': widget.queueNumber,
         'queueEntryId': widget.queueEntryId,
-        'chiefComplaint': widget.chiefComplaint,
-        'historyOfPresentIllness': widget.historyOfPresentIllness,
-        'pastMedicalHistory': widget.pastMedicalHistory,
+        'chiefComplaint': _deptRecord?.chiefComplaint ?? widget.chiefComplaint,
+        'historyOfPresentIllness': _deptRecord?.historyOfPresentIllness ?? widget.historyOfPresentIllness,
+        'pastMedicalHistory': _deptRecord?.pmhSummaryText ?? widget.pastMedicalHistory,
       },
     );
     if (mounted) {
@@ -334,6 +350,11 @@ class _NursePatientExamsScreenState extends State<NursePatientExamsScreen> {
     final complaint = widget.chiefComplaint ?? patient?.chiefComplaint ?? '';
     final hpi = widget.historyOfPresentIllness ?? patient?.historyOfPresentIllness ?? '';
     final pmh = widget.pastMedicalHistory ?? patient?.pastMedicalHistory ?? '';
+    final nurseConditions = (_deptRecord != null && _deptRecord!.effectiveConditions.isNotEmpty)
+        ? _deptRecord!.effectiveConditions
+        : (patient?.pmhConditionsList.isNotEmpty == true
+            ? patient!.pmhConditionsList
+            : PmhCondition.parseFromText(pmh));
     final doctor = widget.assignedDoctor ?? patient?.assignedDoctor ?? '';
     final room = widget.assignedRoom ?? patient?.assignedRoom ?? '';
     final sex = patient?.sex ?? '';
@@ -515,13 +536,55 @@ class _NursePatientExamsScreenState extends State<NursePatientExamsScreen> {
                   ),
                 ],
 
-                // Past Medical History (PMH)
-                if (pmh.isNotEmpty) ...[
+                // Past Medical History (PMH) & Medications
+                if (nurseConditions.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.medical_services_outlined, size: 14, color: AppColors.cyanCalm),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Past Medical History & Medications:',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.cyanCalm,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: nurseConditions.map((cond) {
+                      final medsText = cond.medications.isNotEmpty
+                          ? ' (${cond.medications.join(", ")})'
+                          : '';
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.cyanCalm.withValues(alpha: isDark ? 0.15 : 0.08),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: AppColors.cyanCalm.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          '${cond.condition}$medsText',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ] else if (pmh.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.medical_services_outlined, size: 14, color: AppColors.cyanCalm),
+                      const Icon(Icons.medical_services_outlined, size: 14, color: AppColors.cyanCalm),
                       const SizedBox(width: 6),
                       Expanded(
                         child: RichText(

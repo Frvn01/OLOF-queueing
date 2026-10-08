@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/app_image_helper.dart';
 import '../../data/models/patient.dart';
+import '../../data/models/patient_dept_record.dart';
 import '../../data/models/queue_entry.dart';
+import '../../data/repositories/patient_dept_repository.dart';
 import '../../providers/patient_provider.dart';
 import '../../providers/queue_provider.dart';
 import '../../providers/theme_provider.dart';
@@ -814,21 +816,72 @@ class _NurseStationScreenState extends State<NurseStationScreen>
             ),
           ],
         ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildIntakeField('Patient Number', patient.patientNo, isDark),
-              _buildIntakeField('Department & Ticket', '${entry.department} • ${entry.queueNumber}', isDark),
-              _buildIntakeField('Assigned Doctor', entry.assignedDoctor ?? patient.assignedDoctor ?? 'Not assigned', isDark),
-              _buildIntakeField('Assigned Room', entry.assignedRoom ?? patient.assignedRoom ?? 'Not assigned', isDark),
-              const Divider(height: 20),
-              _buildIntakeField('Chief Complaint', patient.chiefComplaint ?? 'None recorded', isDark, isHighlight: true),
-              _buildIntakeField('History of Present Illness (HPI)', patient.historyOfPresentIllness ?? 'None recorded', isDark),
-              _buildIntakeField('Past Medical History (PMH)', patient.pastMedicalHistory ?? 'None recorded', isDark),
-            ],
-          ),
+        content: FutureBuilder<PatientDeptRecord?>(
+          future: PatientDeptRepository().getRecord(patient.id, entry.department),
+          builder: (ctx, snapshot) {
+            final deptRecord = snapshot.data;
+            final complaint = deptRecord?.chiefComplaint ?? patient.chiefComplaint ?? 'None recorded';
+            final hpi = deptRecord?.historyOfPresentIllness ?? patient.historyOfPresentIllness ?? 'None recorded';
+            final pmhConditions = (deptRecord != null && deptRecord.effectiveConditions.isNotEmpty)
+                ? deptRecord.effectiveConditions
+                : patient.pmhConditionsList;
+            final fallbackPmh = deptRecord?.pastMedicalHistory ?? patient.pastMedicalHistory ?? 'None recorded';
+
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildIntakeField('Patient Number', patient.patientNo, isDark),
+                  _buildIntakeField('Department & Ticket', '${entry.department} • ${entry.queueNumber}', isDark),
+                  _buildIntakeField('Assigned Doctor', entry.assignedDoctor ?? patient.assignedDoctor ?? 'Not assigned', isDark),
+                  _buildIntakeField('Assigned Room', entry.assignedRoom ?? patient.assignedRoom ?? 'Not assigned', isDark),
+                  const Divider(height: 20),
+                  _buildIntakeField('Chief Complaint', complaint, isDark, isHighlight: true),
+                  _buildIntakeField('History of Present Illness (HPI)', hpi, isDark),
+                  if (pmhConditions.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        'Past Medical History & Medications',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary,
+                        ),
+                      ),
+                    ),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: pmhConditions.map((cond) {
+                        final meds = cond.medications.isNotEmpty ? ' (${cond.medications.join(", ")})' : '';
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEC4899).withValues(alpha: isDark ? 0.15 : 0.08),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFFEC4899).withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            '${cond.condition}$meds',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 10),
+                  ] else ...[
+                    _buildIntakeField('Past Medical History (PMH)', fallbackPmh, isDark),
+                  ],
+                ],
+              ),
+            );
+          },
         ),
         actions: [
           ElevatedButton(
