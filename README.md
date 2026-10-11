@@ -52,9 +52,11 @@ Before the implementation of the OLOF Queueing System, **Our Lady of Fatima Eye 
 The **OLOF Queueing & Clinical Management System** is a unified, real-time, cross-platform healthcare operations suite engineered specifically for the specialized needs of **Our Lady of Fatima Eye Ear Nose Throat Center**.
 
 The product digitally transforms the entire patient journey into a streamlined, automated, paperless continuum:
-- **Intelligent Queue Orchestration:** Automatically segregates and manages patient flow into dual clinical tracks: **ENT (Ear, Nose & Throat)** and **EYES (Ophthalmology)**, issuing standardized queue tickets (e.g., `ENT-001`, `EYE-001`).
+- **Intelligent Queue Orchestration:** Automatically segregates and manages patient flow into dual clinical tracks: **ENT (Ear, Nose & Throat)** and **EYES (Ophthalmology)**, issuing standardized queue tickets (e.g., `ENT-001`, `EYE-001`) with per-doctor daily sequencing so multiple consulting physicians can run in parallel.
+- **Printed Queue Tickets:** Instantly prints 58 mm thermal queue slips (POS-58 compatible) or exports PDF tickets carrying the queue number, patient name, doctor, room, and visit purpose.
 - **Real-Time Waiting Area Display:** A dedicated TV/projector display board with crystal-clear visual status and automated audio announcements that calls patients by queue number to their assigned room and doctor.
-- **Integrated Pre-Consultation Triage:** A dedicated digital Nurse Station for capturing vital signs, visual acuity (OD/OS), and interactive anatomical diagram sketching.
+- **Integrated Pre-Consultation Triage:** A dedicated digital Nurse Station for capturing general vital signs, ophthalmic vitals (visual acuity, IOP, funduscopy, EOMM), and interactive anatomical diagram sketching.
+- **Department-Scoped Clinical Records:** A single patient can hold independent chief complaints, histories, past medical history with medications, and assigned doctors for ENT and EYES.
 - **Doctor Consultation Suite:** An electronic health record (EHR) and consultation module allowing doctors to review pre-exam findings, inspect diagram annotations, document clinical notes, issue diagnoses, and track visit histories.
 - **Cross-Platform & Offline-Resilient:** Operates seamlessly across Windows desktops, Android/iOS tablets, and Web browsers, backed by cloud synchronization with local storage fallback to ensure zero downtime.
 
@@ -64,32 +66,41 @@ The product digitally transforms the entire patient journey into a streamlined, 
 
 ### 1. 📺 Real-Time TV Queue Display (Web / Desktop)
 - **Live Waiting & Serving Board:** Split-screen layout displaying active consultations and upcoming patients per department (ENT and EYES).
+- **Per-Doctor Queue Cards:** Each consulting physician gets their own *Now Serving* and *Upcoming* panel, so parallel clinics are readable at a glance on a single screen.
 - **Automated Audio Chimes & Calling:** Plays alert tones and announces called queue numbers alongside room and doctor assignments.
-- **Doctor & Room Attribution:** Displays assigned physician and consultation room clearly on screen.
+- **Doctor & Room Attribution:** Displays assigned physician and consultation room clearly, with doctor names normalized (no duplicated "Dr. DR." prefixes).
 - **Privacy-Compliant:** Displays designated queue numbers and doctor details, protecting patient identity in public waiting areas.
+- **Desktop & Web Only:** The `/display` route is restricted to desktop and web; mobile devices hitting the route are redirected to the landing screen.
 
 ### 2. 🗂️ Front Desk & Receptionist Kiosk (Mobile / Tablet / Desktop)
-- **Fast Patient Registration:** Comprehensive intake form covering demographics, contact info, civil status, referral source, and camera/photo upload.
+- **Guided Multi-Step Registration:** A step-by-step intake wizard (Department ➔ Personal ➔ Contact ➔ Clinical) covering demographics, contact info, civil status, referral source, and camera/photo upload.
+- **Department Selection Upfront:** Patients choose **ENT**, **EYES**, or **BOTH** at the first step; consulting rooms and doctors then auto-filter to the chosen track.
 - **Returning Patient Quick Search:** Instant search by Patient Number (`OLOF-XXXXXX`), name, or contact details to retrieve existing medical profiles.
 - **QR Code Check-In:** Rapid scan-to-check-in using patient QR cards.
-- **Queue Ticket Issuance:** Direct assignment to department, room, consulting physician, and visit purpose (Consultation, Follow-up, Pre-op, Post-op, Lab Results, etc.).
-- **Patient Profile Management:** Complete view of previous visits, previous queue entries, and historical diagnoses.
+- **Queue Ticket Issuance & Printing:** Direct assignment to department, room, consulting physician, and visit purpose (Consultation, Follow-up, Pre-op, Post-op, Lab Results, etc.), followed by one-click printing of a 58 mm thermal ticket or a PDF slip.
+- **Patient Profile Management:** Department-tabbed (ENT / EYES) profile view with per-department chief complaint, history of present illness, structured past medical history with medications, visit-history filters, and previous queue entries.
+- **Secretary Queue View:** Live per-department *Now Serving* readout at the front desk.
 
 ### 3. 👩‍⚕️ Nurse Clinical Station & Triage (Mobile / Tablet / Desktop)
-- **Queue Triage Queue:** Nurse-accessible list of queued patients ready for pre-consultation assessment.
-- **Vital Signs Logging:** Dedicated recording for Blood Pressure (BP), Pulse Rate, Body Temperature, Respiratory Rate, Height, Weight, and automatic Body Mass Index (BMI) computation.
-- **Visual Acuity Testing (Ophthalmology):** OD (Right Eye) and OS (Left Eye) distance and near vision tracking.
+- **Queue Triage Queue:** Nurse-accessible list of queued patients ready for pre-consultation assessment, with recorded-vitals preview chips on each patient card.
+- **Comprehensive Vitals Modal:** A single intake dialog split into a *General Vitals* section (Blood Pressure, Heart Rate, Temperature, Respiratory Rate, Oxygen Saturation, Weight) and a *Specialized Eye Vitals* section.
+- **Ophthalmic Vitals:** Visual Acuity (OD/OS), Intraocular Pressure — IOP (OD/OS), Funduscopy / Optic Disc findings (OD/OS), and Extraocular Muscle Movement (EOMM).
+- **Quick Presets:** One-tap common-value chips (BP 120/80, Temp 36.5°C, HR 72 bpm, SpO₂ 98%, RR 18) to speed up intake.
 - **Interactive Anatomical Canvas (Clinical Drawings):**
   - High-resolution anatomical diagrams: **Eyes, Ears, Nose, Throat, Head & Neck, and General Anatomy**.
+  - Department-strict diagram sets — ophthalmic views (Gross Exam, Fundoscopy, Biomicroscopy) surface only for EYES patients, ENT views only for ENT patients.
   - Multi-touch digital drawing canvas with customizable stroke width, colors, and eraser.
-  - Multiple perspective/diagram views per clinical exam.
+  - Multiple perspective/diagram views per clinical exam, saved directly onto the patient record.
   - High-fidelity cloud storage for drawing captures linked to patient records.
-- **Clinical History Ingestion:** Logs chief complaints, history of present illness (HPI), and past medical history (PMH) directly for the consulting physician.
+- **Clinical History Ingestion:** Logs chief complaints, history of present illness (HPI), and past medical history (PMH) — structured by condition with linked medications — directly for the consulting physician.
 
 ### 4. 👨‍⚕️ Doctor Consultation Suite (Tablet / Mobile / Desktop)
 - **Doctor Dashboard:** Real-time summary of today's pending patients, completed consultations, and room queue status.
-- **Direct Queue Calling:** Controls to call the next patient, place patients on hold, skip, or finalize visits.
-- **Comprehensive Patient Dossier:** Immediate review of nurse-recorded vital signs, visual acuity, clinical diagram annotations, and past visit chronologies.
+- **Direct Queue Calling:** Controls to call the next patient, place patients on hold, skip, or finalize visits — scoped per physician so each room runs its own queue.
+- **Vitals Overview Card:** Color-coded grid of general vitals (Temp, BP, HR, RR, SpO₂, Weight) plus eye metric badges (VA, IOP, Funduscopy) where applicable.
+- **Symptoms & Complaints Card:** Chief complaint and history of present illness surfaced up front for the consult.
+- **Clinical Diagrams Section:** Nurse-captured exam drawings grouped by department and viewable inline during consultation.
+- **Department-Scoped Patient Dossier:** Chief complaint, HPI, and PMH per department alongside past visit chronologies.
 - **Consultation Charting:** Secure documentation of clinical diagnosis, physician notes, and treatment plans.
 - **Schedule & Appointment Management:** Set consulting availability, clinic days, and manage future appointments.
 - **Doctor Profile & Reports:** Activity logs, consultations per day/week, and diagnostic trend reporting.
@@ -103,7 +114,8 @@ The product digitally transforms the entire patient journey into a streamlined, 
 - **Reports & Queue Archive:** Historical reporting with date-range filters, exportable records, and department breakdown.
 
 ### 6. 🔐 Staff Authentication & Security
-- **Physical QR Card Login:** Staff scan their personalized physical badge at any device camera to unlock their assigned role.
+- **Physical QR Card Login:** Staff scan their personalized physical badge at any device camera to unlock their assigned role — identity is resolved automatically from the credential.
+- **No PINs, No Manual Bypass:** PINs and manual station bypass have been removed; only verified staff QR credentials can unlock clinical stations.
 - **Role-Based Station Locking:** Automatically routes users to their authorized views (Receptionist, Nurse, Doctor, Admin).
 - **Theme Customization:** Complete support for Dark Mode and Light Mode across all modules.
 
@@ -152,6 +164,7 @@ The design and technical development of the OLOF Queueing System followed a syst
 | **QR Code Engine** | `qr_flutter` & `mobile_scanner` | Fast barcode/QR generation and live camera decoding |
 | **Audio Alert** | `audioplayers` | Real-time chime and audio announcements for queue calling |
 | **Canvas & Graphics** | `flutter_colorpicker` + CustomPainter | Vector sketching tool for medical diagram annotations |
+| **Ticket Printing** | `printing` + `pdf` | 58 mm thermal queue-slip printing (POS-58) with PDF export fallback |
 | **Local Persistence** | `shared_preferences` | Client-side cache and offline fallback state |
 
 ---
@@ -160,8 +173,9 @@ The design and technical development of the OLOF Queueing System followed a syst
 
 The database schema (`supabase_schema.sql`) implements a robust relational structure:
 
-- `patients` — Demographics, contact information, medical background, photo URLs, assigned physician/room.
-- `queue_entries` — Daily ticket queue with statuses (`waiting`, `serving`, `completed`, `skipped`, `on_hold`), date keys, and timestamps.
+- `patients` — Demographics, contact information, medical background (including structured past-medical-history conditions with linked medications), photo URLs, assigned physician/room.
+- `queue_entries` — Daily ticket queue with statuses (`waiting`, `serving`, `completed`, `skipped`, `on_hold`), date keys, timestamps, and a per-doctor sequence (`doctor_queue_number`) so each physician gets their own daily numbering alongside the department-wide sequence.
+- `patient_dept_records` — One department-scoped record per patient per department (ENT/EYES): chief complaint, HPI, PMH conditions, first-time flag, assigned doctor and room. Unique on `(patient_id, department)` and streamed over Supabase Realtime.
 - `clinical_examinations` — Nurse triage data, vital signs, exam views, annotation vectors (JSONB), and diagram snapshots.
 - `visit_records` — Historical log of all consultations, diagnoses, and medical notes.
 - `clinic_doctors` — Active physicians, departmental affiliations (ENT/EYES), and assigned rooms.
@@ -208,7 +222,17 @@ flutter pub get
    --dart-define=SUPABASE_ANON_KEY=your-anon-key
    ```
 
-### 3. Run the Application
+### 3. (Optional) Set Up Thermal Queue-Ticket Printing
+The receptionist module can print 58 mm queue slips directly to a thermal printer (e.g., **POS-58**):
+1. Install the thermal printer and its Windows driver, then make sure the printer shows up in Windows Settings.
+2. When issuing a queue ticket, the app auto-detects available printers and prints a 58 mm slip; if none is found, it falls back to a PDF layout / system print dialog.
+3. For troubleshooting or a manual raw-print test outside the app, use the helper script with the printer name and ticket fields:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File lib\core\utils\thermal_printer_windows.ps1 -PrinterName "POS-58" -Dept "ENT" -DeptLabel "[ENT CLINIC]" -QueueNo "#001" -PatientName "Juan Dela Cruz" -DoctorName "Dr. Lorenzo Vera Cruz" -RoomName "ENT ROOM 1" -Purpose "Consultation" -IssuedAt "10/07 01:20AM"
+   ```
+   A reference sample of the printed 58 mm ticket layout is included in the repo as `POS-58`.
+
+### 4. Run the Application
 - **TV Display Mode (Web):**
   ```bash
   flutter run -d chrome
