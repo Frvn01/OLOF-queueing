@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../core/constants/app_constants.dart';
+import '../core/utils/helpers.dart';
 import '../data/models/doctor.dart';
 import '../data/models/doctor_schedule.dart';
 import '../data/models/patient.dart';
@@ -217,13 +218,24 @@ class DoctorProvider extends ChangeNotifier {
     }
   }
 
-  /// Get patients specifically assigned to this doctor or department
+  /// Get patients specifically assigned to this doctor (normalized name comparison)
   List<Patient> getAssignedPatients() {
     return _patients.where((p) {
       if (p.assignedDoctor != null && p.assignedDoctor!.isNotEmpty) {
-        return p.assignedDoctor == _activeDoctor;
+        return DoctorHelper.isSameDoctor(p.assignedDoctor, _activeDoctor);
       }
-      return true; // Include unassigned or all for quick kiosk lookup
+      return false; // Only explicitly assigned patients
+    }).toList();
+  }
+
+  /// Get patients for this doctor's department (assigned + unassigned department fallback)
+  List<Patient> getDeptPatients() {
+    return _patients.where((p) {
+      if (p.assignedDoctor != null && p.assignedDoctor!.isNotEmpty) {
+        return DoctorHelper.isSameDoctor(p.assignedDoctor, _activeDoctor);
+      }
+      // Include unassigned patients as potential walk-ins for this department
+      return true;
     }).toList();
   }
 
@@ -275,10 +287,11 @@ class DoctorProvider extends ChangeNotifier {
   // ── Queue & Consultation Logic ──────────────────────────────
 
   /// Filter queue specifically assigned to this doctor / department
+  /// Uses normalized name comparison (strips Dr./DR. prefix, case-insensitive)
   List<QueueEntry> filterAssignedQueue(List<QueueEntry> fullQueue) {
     return fullQueue.where((e) {
       if (e.assignedDoctor != null && e.assignedDoctor!.isNotEmpty) {
-        return e.assignedDoctor == _activeDoctor;
+        return DoctorHelper.isSameDoctor(e.assignedDoctor, _activeDoctor);
       }
       // Fallback: match by department if unassigned
       return e.department == _activeDepartment || _activeDepartment == 'BOTH';
@@ -340,8 +353,8 @@ class DoctorProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. Fetch patient
-      final patient = await _patientRepo.getPatient(patientId);
+      // 1. Fetch patient directly from Supabase (bypasses stale/empty in-memory cache)
+      final patient = await _patientRepo.fetchPatient(patientId);
       _currentPatient = patient;
 
       // 2. Fetch department clinical records (ENT / EYES)
@@ -410,6 +423,47 @@ class DoctorProvider extends ChangeNotifier {
     if (_currentPatient == null) return false;
 
     try {
+      // Capture triage vital signs from current patient or queue entry
+      final vitals = _currentPatient?.vitalSigns ?? _currentQueueEntry?.vitalSigns;
+      final vitalsSection = StringBuffer();
+      if (vitals != null && vitals.isNotEmpty) {
+        vitalsSection.writeln('[TRIAGE VITAL SIGNS]');
+        final generalParts = <String>[];
+        if (vitals.bloodPressure != null && vitals.bloodPressure!.isNotEmpty) {
+          generalParts.add('BP: ${vitals.bloodPressure}');
+        }
+        if (vitals.heartRate != null) generalParts.add('HR: ${vitals.heartRate} bpm');
+        if (vitals.temperature != null) generalParts.add('Temp: ${vitals.temperature}°C');
+        if (vitals.respiratoryRate != null) generalParts.add('RR: ${vitals.respiratoryRate} cpm');
+        if (vitals.oxygenSaturation != null) generalParts.add('SpO2: ${vitals.oxygenSaturation}%');
+        if (vitals.weight != null) generalParts.add('Weight: ${vitals.weight} kg');
+        if (generalParts.isNotEmpty) {
+          vitalsSection.writeln('• General: ${generalParts.join(" | ")}');
+        }
+
+        if (vitals.hasEyeVitals) {
+          final eyeParts = <String>[];
+          if (vitals.visualAcuityOD != null || vitals.visualAcuityOS != null) {
+            eyeParts.add('VA: OD ${vitals.visualAcuityOD ?? "-"} / OS ${vitals.visualAcuityOS ?? "-"}');
+          }
+          if (vitals.intraocularPressureOD != null || vitals.intraocularPressureOS != null) {
+            eyeParts.add('IOP: OD ${vitals.intraocularPressureOD ?? "-"} / OS ${vitals.intraocularPressureOS ?? "-"} mmHg');
+          }
+          if (vitals.funduscopyOD != null || vitals.funduscopyOS != null) {
+            eyeParts.add('Funduscopy: OD ${vitals.funduscopyOD ?? "-"} / OS ${vitals.funduscopyOS ?? "-"}');
+          }
+          if (vitals.extraocularMuscleMovement != null && vitals.extraocularMuscleMovement!.isNotEmpty) {
+            eyeParts.add('EOMM: ${vitals.extraocularMuscleMovement}');
+          }
+          if (eyeParts.isNotEmpty) {
+            vitalsSection.writeln('• Ophthalmic: ${eyeParts.join(" | ")}');
+          }
+        }
+        if (vitals.notes != null && vitals.notes!.trim().isNotEmpty) {
+          vitalsSection.writeln('• Nurse Notes: ${vitals.notes!.trim()}');
+        }
+      }
+
       final visit = VisitRecord(
         id: const Uuid().v4(),
         patientId: _currentPatient!.id,
@@ -420,6 +474,7 @@ class DoctorProvider extends ChangeNotifier {
         assignedDoctor: _activeDoctor,
         notes: [
           'Doctor: $_activeDoctor',
+          if (vitalsSection.isNotEmpty) vitalsSection.toString().trim(),
           if (notes.trim().isNotEmpty) notes.trim(),
           if (prescription != null && prescription.trim().isNotEmpty)
             'Prescription / Rx: ${prescription.trim()}',
@@ -434,7 +489,11 @@ class DoctorProvider extends ChangeNotifier {
 
       // Mark queue entry completed if present
       if (_currentQueueEntry != null) {
-        await _queueRepo.markComplete(_currentQueueEntry!.id);
+        try {
+          await _queueRepo.markComplete(_currentQueueEntry!.id);
+        } catch (queueErr) {
+          debugPrint('Notice: queue entry markComplete warning: $queueErr');
+        }
       }
 
       // Clear consultation state

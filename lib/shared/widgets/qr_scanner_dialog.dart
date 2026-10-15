@@ -4,13 +4,18 @@ import '../../core/theme/app_colors.dart';
 
 /// QR Scanner dialog that works on mobile/tablet cameras and provides manual entry fallback for web/desktop
 class QrScannerDialog extends StatefulWidget {
-  const QrScannerDialog({super.key});
+  final String title;
 
-  static Future<String?> show(BuildContext context) {
+  const QrScannerDialog({
+    super.key,
+    this.title = 'Scan Patient QR Code',
+  });
+
+  static Future<String?> show(BuildContext context, {String title = 'Scan Patient QR Code'}) {
     return showDialog<String>(
       context: context,
       barrierDismissible: true,
-      builder: (context) => const QrScannerDialog(),
+      builder: (context) => QrScannerDialog(title: title),
     );
   }
 
@@ -59,9 +64,9 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
                 children: [
                   const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary),
                   const SizedBox(width: 10),
-                  const Text(
-                    'Scan Patient QR Code',
-                    style: TextStyle(
+                  Text(
+                    widget.title,
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,

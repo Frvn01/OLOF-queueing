@@ -4,10 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import '../../core/constants/app_constants.dart';
 import '../../providers/clinic_provider.dart';
 import '../../providers/doctor_provider.dart';
 import '../../providers/queue_provider.dart';
+import '../../shared/widgets/doctor_switcher_dialog.dart';
 
 class DoctorProfileScreen extends StatefulWidget {
   const DoctorProfileScreen({super.key});
@@ -552,90 +552,13 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     );
   }
 
-  /// Dialog to dynamically select active doctor from ClinicProvider / Supabase
+  /// Dialog to dynamically select active doctor from ClinicProvider / Supabase or QR scan
   void _showDoctorSwitcher(
     BuildContext context,
     DoctorProvider doctorProv,
     ClinicProvider clinicProv,
   ) {
-    final docs = clinicProv.doctors;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.switch_account_rounded, color: emeraldPrimary),
-            SizedBox(width: 8),
-            Text('Select Active Doctor Profile'),
-          ],
-        ),
-        content: SizedBox(
-          width: 420,
-          child: docs.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('No doctors configured in clinic database.'),
-                )
-              : ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: docs.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) {
-                    final d = docs[i];
-                    final isSelected = doctorProv.activeDoctor == d.name;
-                    const color = emeraldPrimary;
-
-                    return ListTile(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: isSelected ? color : Colors.grey.withValues(alpha: 0.2),
-                          width: isSelected ? 2 : 1,
-                        ),
-                      ),
-                      tileColor: isSelected ? color.withValues(alpha: 0.08) : null,
-                      leading: CircleAvatar(
-                        backgroundColor: color,
-                        backgroundImage: (d.photoUrl != null && d.photoUrl!.isNotEmpty)
-                            ? _getDoctorImageProvider(d.photoUrl!)
-                            : null,
-                        child: (d.photoUrl != null && d.photoUrl!.isNotEmpty)
-                            ? null
-                            : Text(
-                                d.name.isNotEmpty ? d.name.substring(0, 1) : 'D',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                              ),
-                      ),
-                      title: Text(_formatDoctorDisplayName(d.name),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      subtitle: Text('${d.department} • ${d.room ?? (d.department == AppConstants.deptEyes ? 'OPHTHA ROOM 1' : 'ENT ROOM 1')}'),
-                      trailing: isSelected
-                          ? const Icon(Icons.check_circle_rounded, color: color)
-                          : null,
-                      onTap: () {
-                        doctorProv.selectDoctorModel(d);
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Switched to ${_formatDoctorDisplayName(d.name)}'),
-                            duration: const Duration(seconds: 2),
-                            backgroundColor: color,
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
+    DoctorSwitcherDialog.show(context);
   }
 
   /// Dialog to edit doctor profile with Photo Upload working

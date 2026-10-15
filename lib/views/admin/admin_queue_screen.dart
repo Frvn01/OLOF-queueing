@@ -439,12 +439,20 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
                   ),
                 ),
               ),
-              const Text(
-                'Ready to Enter',
-                style: TextStyle(
-                  color: Color(0xFFD97706),
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: (entry.hasVitals ? AppColors.success : const Color(0xFFF59E0B)).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: entry.hasVitals ? AppColors.success : const Color(0xFFF59E0B)),
+                ),
+                child: Text(
+                  entry.hasVitals ? 'Vitals Completed (2nd Call Ready)' : 'Ready to Enter',
+                  style: TextStyle(
+                    color: entry.hasVitals ? AppColors.success : const Color(0xFFD97706),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 10.5,
+                  ),
                 ),
               ),
             ],
@@ -520,10 +528,51 @@ class _AdminQueueScreenState extends State<AdminQueueScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  entry.patientName,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        entry.patientName,
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    if (entry.isTriage)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEC4899).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFFEC4899), width: 0.8),
+                        ),
+                        child: const Text(
+                          '1st Call (Vitals)',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFEC4899),
+                          ),
+                        ),
+                      )
+                    else if (entry.hasVitals)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: AppColors.success.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: AppColors.success, width: 0.8),
+                        ),
+                        child: const Text(
+                          'Vitals Ready',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.success,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 Text(
                   entry.purpose,

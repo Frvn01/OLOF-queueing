@@ -56,7 +56,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
     super.dispose();
   }
 
-  void _setDefaultFindings(bool isEnt) {
+  void _setDefaultFindings(bool isEnt, VitalSigns? vitals) {
     if (_findingsValues.isNotEmpty) return;
     if (isEnt) {
       _findingsValues['Ear Exam'] = 'Normal';
@@ -68,15 +68,33 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
       _findingsValues['Neck & Nodes'] = 'Supple, no lymphadenopathy';
       _findingsStatus['Neck & Nodes'] = 'normal';
     } else {
-      _findingsValues['Visual Acuity OD'] = '20/20';
+      final vaOD = vitals?.visualAcuityOD;
+      final vaOS = vitals?.visualAcuityOS;
+      final iopOD = vitals?.intraocularPressureOD;
+      final iopOS = vitals?.intraocularPressureOS;
+      final fundusOD = vitals?.funduscopyOD;
+      final fundusOS = vitals?.funduscopyOS;
+
+      _findingsValues['Visual Acuity OD'] = (vaOD != null && vaOD.isNotEmpty) ? vaOD : '20/20';
       _findingsStatus['Visual Acuity OD'] = 'normal';
-      _findingsValues['Visual Acuity OS'] = '20/20';
+      _findingsValues['Visual Acuity OS'] = (vaOS != null && vaOS.isNotEmpty) ? vaOS : '20/20';
       _findingsStatus['Visual Acuity OS'] = 'normal';
-      _findingsValues['Eye Pressure (IOP)'] = '15 mmHg (Normal)';
+
+      String iopText = '15 mmHg (Normal)';
+      if ((iopOD != null && iopOD.isNotEmpty) || (iopOS != null && iopOS.isNotEmpty)) {
+        iopText = 'OD: ${iopOD ?? "-"} mmHg, OS: ${iopOS ?? "-"} mmHg';
+      }
+      _findingsValues['Eye Pressure (IOP)'] = iopText;
       _findingsStatus['Eye Pressure (IOP)'] = 'normal';
+
       _findingsValues['Anterior Chamber & Cornea'] = 'Clear, deep and quiet';
       _findingsStatus['Anterior Chamber & Cornea'] = 'normal';
-      _findingsValues['Fundoscopy / Retina'] = 'Normal disc, cup-to-disc 0.3';
+
+      String fundusText = 'Normal disc, cup-to-disc 0.3';
+      if ((fundusOD != null && fundusOD.isNotEmpty) || (fundusOS != null && fundusOS.isNotEmpty)) {
+        fundusText = 'OD: ${fundusOD ?? "-"} | OS: ${fundusOS ?? "-"}';
+      }
+      _findingsValues['Fundoscopy / Retina'] = fundusText;
       _findingsStatus['Fundoscopy / Retina'] = 'normal';
     }
   }
@@ -119,7 +137,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
       );
     }
 
-    _setDefaultFindings(isEnt);
+    _setDefaultFindings(isEnt, patient.vitalSigns ?? widget.queueEntry?.vitalSigns);
 
     return Scaffold(
       appBar: AppBar(
@@ -158,7 +176,11 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
           const SizedBox(height: 16),
 
           // ── 2. VITAL SIGNS SUMMARY ROW ──────────────────────────────
-          _buildVitalSignsCard(patient.vitalSigns ?? widget.queueEntry?.vitalSigns, themeColor),
+          _buildVitalSignsCard(
+            patient.vitalSigns ?? widget.queueEntry?.vitalSigns,
+            themeColor,
+            !isEnt,
+          ),
 
           const SizedBox(height: 16),
 
@@ -172,8 +194,8 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
 
           const SizedBox(height: 20),
 
-          // ── 4. NURSE STATION EXAMINATIONS & DIAGRAMS WITH DESCRIPTION ─
-          _buildNurseExaminationsSection(context, exams, themeColor),
+          // ── 4. CLINICAL DIAGRAMS & ANATOMICAL DRAWINGS (DOCTOR CONSULTATION) ─
+          _buildClinicalDiagramsSection(context, exams, themeColor, isEnt),
 
           const SizedBox(height: 24),
 
@@ -291,13 +313,17 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
     );
   }
 
-  Widget _buildVitalSignsCard(VitalSigns? vitals, Color themeColor) {
-    final bp = vitals?.bloodPressure ?? '120/80';
-    final temp = vitals?.temperature != null ? '${vitals!.temperature}°C' : '36.5°C';
-    final hr = vitals?.heartRate != null ? '${vitals!.heartRate} bpm' : '75 bpm';
-    final rr = vitals?.respiratoryRate != null ? '${vitals!.respiratoryRate}/min' : '18/min';
-    final spo2 = vitals?.oxygenSaturation != null ? '${vitals!.oxygenSaturation}%' : '98%';
-    final wt = vitals?.weight != null ? '${vitals!.weight} kg' : '62.0 kg';
+  Widget _buildVitalSignsCard(VitalSigns? vitals, Color themeColor, bool isEyes) {
+    final hasVitals = vitals != null && vitals.isNotEmpty;
+    final bp = vitals?.bloodPressure ?? (hasVitals ? '-' : '120/80');
+    final temp = vitals?.temperature != null ? '${vitals!.temperature}°C' : (hasVitals ? '-' : '36.5°C');
+    final hr = vitals?.heartRate != null ? '${vitals!.heartRate} bpm' : (hasVitals ? '-' : '75 bpm');
+    final rr = vitals?.respiratoryRate != null ? '${vitals!.respiratoryRate}/min' : (hasVitals ? '-' : '18/min');
+    final spo2 = vitals?.oxygenSaturation != null ? '${vitals!.oxygenSaturation}%' : (hasVitals ? '-' : '98%');
+    final wt = vitals?.weight != null ? '${vitals!.weight} kg' : (hasVitals ? '-' : '62.0 kg');
+    final ht = vitals?.height != null ? '${vitals!.height} cm' : (hasVitals ? '-' : '165 cm');
+
+    final hasEyeVitals = vitals?.hasEyeVitals == true;
 
     return Card(
       elevation: 0,
@@ -315,25 +341,181 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
                 Icon(Icons.monitor_heart_rounded, size: 18, color: themeColor),
                 const SizedBox(width: 6),
                 const Text(
-                  'Triage Vital Signs (Nurse Intake)',
+                  'Triage Vital Signs (Nurse Station Intake)',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: hasVitals
+                        ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                        : Colors.orange.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    hasVitals ? 'INTAKE COMPLETED' : 'DEFAULT BASELINE',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: hasVitals ? const Color(0xFF10B981) : Colors.orange,
+                    ),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildVitalMetric('Temp', temp, Icons.thermostat_rounded, Colors.orange),
-                _buildVitalMetric('BP', bp, Icons.favorite_border_rounded, Colors.red),
-                _buildVitalMetric('HR', hr, Icons.favorite_rounded, Colors.pink),
-                _buildVitalMetric('RR', rr, Icons.air_rounded, AppColors.cyanCalm),
-                _buildVitalMetric('SpO2', spo2, Icons.water_drop_rounded, const Color(0xFF0D9488)),
-                _buildVitalMetric('Weight', wt, Icons.scale_rounded, Colors.indigo),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompact = constraints.maxWidth < 560;
+                if (isCompact) {
+                  return Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildVitalMetric('Temp', temp, Icons.thermostat_rounded, Colors.orange),
+                          _buildVitalMetric('BP', bp, Icons.favorite_border_rounded, Colors.red),
+                          _buildVitalMetric('HR / PR', hr, Icons.favorite_rounded, Colors.pink),
+                          _buildVitalMetric('RR', rr, Icons.air_rounded, AppColors.cyanCalm),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildVitalMetric('SpO2', spo2, Icons.water_drop_rounded, const Color(0xFF0D9488)),
+                          _buildVitalMetric('Weight', wt, Icons.scale_rounded, Colors.indigo),
+                          _buildVitalMetric('Height', ht, Icons.straighten_rounded, Colors.teal),
+                        ],
+                      ),
+                    ],
+                  );
+                }
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildVitalMetric('Temp', temp, Icons.thermostat_rounded, Colors.orange),
+                    _buildVitalMetric('BP', bp, Icons.favorite_border_rounded, Colors.red),
+                    _buildVitalMetric('HR / PR', hr, Icons.favorite_rounded, Colors.pink),
+                    _buildVitalMetric('RR', rr, Icons.air_rounded, AppColors.cyanCalm),
+                    _buildVitalMetric('SpO2', spo2, Icons.water_drop_rounded, const Color(0xFF0D9488)),
+                    _buildVitalMetric('Weight', wt, Icons.scale_rounded, Colors.indigo),
+                    _buildVitalMetric('Height', ht, Icons.straighten_rounded, Colors.teal),
+                  ],
+                );
+              },
             ),
+
+            // Ophthalmic Eye Vitals (Crucial for Eyes consultation or when eye vitals recorded)
+            if (hasEyeVitals || isEyes) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.cyanCalm.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.cyanCalm.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.visibility_rounded, size: 14, color: AppColors.cyanCalm),
+                        SizedBox(width: 6),
+                        Text(
+                          'OPHTHALMIC TRIAGE VITALS (NURSE STATION)',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.cyanCalm,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    if (hasEyeVitals) ...[
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
+                        children: [
+                          if (vitals!.visualAcuityOD != null || vitals.visualAcuityOS != null)
+                            _buildEyeMetricBadge(
+                              'Visual Acuity (VA c/-)',
+                              'OD: ${vitals.visualAcuityOD ?? "-"}  |  OS: ${vitals.visualAcuityOS ?? "-"}',
+                            ),
+                          if (vitals.intraocularPressureOD != null || vitals.intraocularPressureOS != null)
+                            _buildEyeMetricBadge(
+                              'Intraocular Pressure (IOP)',
+                              'OD: ${vitals.intraocularPressureOD ?? "-"}  |  OS: ${vitals.intraocularPressureOS ?? "-"} mmHg',
+                            ),
+                          if (vitals.funduscopyOD != null || vitals.funduscopyOS != null)
+                            _buildEyeMetricBadge(
+                              'Funduscopy / Retina',
+                              'OD: ${vitals.funduscopyOD ?? "-"}  |  OS: ${vitals.funduscopyOS ?? "-"}',
+                            ),
+                          if (vitals.extraocularMuscleMovement != null && vitals.extraocularMuscleMovement!.isNotEmpty)
+                            _buildEyeMetricBadge(
+                              'EOMM',
+                              vitals.extraocularMuscleMovement!,
+                            ),
+                        ],
+                      ),
+                    ] else ...[
+                      const Text(
+                        'No ophthalmic measurements recorded during triage yet.',
+                        style: TextStyle(fontSize: 11.5, fontStyle: FontStyle.italic, color: Colors.grey),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+
+            if (vitals?.notes != null && vitals!.notes!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Nurse Notes: ${vitals.notes}',
+                style: const TextStyle(fontSize: 11.5, fontStyle: FontStyle.italic, color: Colors.grey),
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildEyeMetricBadge(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.cyanCalm.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              color: AppColors.cyanCalm,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -654,63 +836,183 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
     );
   }
 
-  Widget _buildNurseExaminationsSection(
+  Widget _buildClinicalDiagramsSection(
     BuildContext context,
     List<Map<String, dynamic>> exams,
     Color themeColor,
+    bool isEnt,
   ) {
+    // Strictly isolate diagrams by department
+    final deptExams = exams.where((group) {
+      final groupDept = group['department']?.toString().toUpperCase();
+      final examType = group['exam_type']?.toString().toUpperCase() ?? '';
+      if (!isEnt) {
+        // EYES consultation: STRICTLY EYES diagrams only
+        return groupDept == 'EYES' || examType == 'EYES' || examType == 'EYE';
+      } else {
+        // ENT consultation: STRICTLY ENT diagrams only (no eyes)
+        return groupDept != 'EYES' && examType != 'EYES' && examType != 'EYE';
+      }
+    }).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Row(
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isCompact = constraints.maxWidth < 520;
+            if (isCompact) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.draw_rounded, color: Color(0xFF0D9488), size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          isEnt
+                              ? 'ENT Anatomical Drawings'
+                              : 'Eye Clinical Diagrams',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0D9488).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${deptExams.length} Diagrams',
+                          style: const TextStyle(
+                            color: Color(0xFF0D9488),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () => isEnt
+                            ? _showEntDiagramSelectorModal(context)
+                            : _showEyeDiagramSelectorModal(context),
+                        icon: const Icon(Icons.brush_rounded, size: 15),
+                        label: const Text('+ Draw Diagram'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0D9488),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            }
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.brush_rounded, color: Color(0xFF0D9488), size: 20),
-                SizedBox(width: 8),
-                Text(
-                  'Nurse Station Diagrams & Findings',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                Row(
+                  children: [
+                    const Icon(Icons.draw_rounded, color: Color(0xFF0D9488), size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      isEnt
+                          ? 'ENT Anatomical Drawings & Annotations'
+                          : 'Eye Clinical Diagrams & Anatomical Drawings',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0D9488).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${deptExams.length} Diagrams',
+                        style: const TextStyle(
+                          color: Color(0xFF0D9488),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () => isEnt
+                          ? _showEntDiagramSelectorModal(context)
+                          : _showEyeDiagramSelectorModal(context),
+                      icon: const Icon(Icons.brush_rounded, size: 15),
+                      label: const Text('+ Draw Diagram'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0D9488),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0D9488).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${exams.length} Exams Recorded',
-                style: const TextStyle(
-                  color: Color(0xFF0D9488),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11,
-                ),
-              ),
-            ),
-          ],
+            );
+          },
         ),
         const SizedBox(height: 12),
-        if (exams.isEmpty)
+        if (deptExams.isEmpty)
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
               color: Colors.grey.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
             ),
-            child: const Center(
-              child: Text(
-                'No clinical diagrams or exams recorded by the nurse for this patient.',
-                style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic, fontSize: 13),
-                textAlign: TextAlign.center,
-              ),
+            child: Column(
+              children: [
+                Icon(
+                  isEnt ? Icons.hearing_rounded : Icons.visibility_rounded,
+                  size: 36,
+                  color: (isEnt ? const Color(0xFFF59E0B) : AppColors.cyanCalm).withValues(alpha: 0.6),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'No ${isEnt ? "ENT" : "ophthalmic"} anatomical diagrams recorded for this patient yet.',
+                  style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic, fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () => isEnt
+                      ? _showEntDiagramSelectorModal(context)
+                      : _showEyeDiagramSelectorModal(context),
+                  icon: const Icon(Icons.add_rounded, size: 16),
+                  label: Text('Open ${isEnt ? "ENT" : "Eye"} Drawing Board'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0D9488),
+                    side: const BorderSide(color: Color(0xFF0D9488), width: 1.2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
+                  ),
+                ),
+              ],
             ),
           )
         else
-          ...exams.map((group) => _buildExamGroupCard(context, group, themeColor)),
+          ...deptExams.map((group) => _buildExamGroupCard(context, group, themeColor, isEnt)),
       ],
     );
   }
@@ -719,6 +1021,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
     BuildContext context,
     Map<String, dynamic> group,
     Color themeColor,
+    bool isEnt,
   ) {
     final examType = group['exam_type']?.toString() ?? 'EXAM';
     final findings = group['clinical_findings']?.toString();
@@ -777,7 +1080,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
                       Icon(Icons.notes_rounded, size: 14, color: Color(0xFF0D9488)),
                       SizedBox(width: 6),
                       Text(
-                        'NURSE DESCRIPTION & FINDINGS:',
+                        'CLINICAL FINDINGS & ANATOMICAL NOTES:',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -790,7 +1093,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
                   Text(
                     findings?.isNotEmpty == true
                         ? findings!
-                        : 'No detailed clinical descriptions provided by triage nurse.',
+                        : 'No detailed clinical descriptions provided.',
                     style: const TextStyle(fontSize: 13, height: 1.4),
                   ),
                 ],
@@ -816,10 +1119,349 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> {
                 ),
               ),
             ],
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _openDrawingScreen(
+                    examType: examType,
+                    department: group['department']?.toString() ?? (isEnt ? 'ENT' : 'EYES'),
+                    examinationUuid: group['examination_uuid'],
+                    savedDiagram: group['items'],
+                    viewMode: false,
+                  ),
+                  icon: const Icon(Icons.edit_note_rounded, size: 16),
+                  label: const Text('Annotate / Edit Diagram'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0D9488),
+                    side: const BorderSide(color: Color(0xFF0D9488)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton.icon(
+                  onPressed: () => _openDrawingScreen(
+                    examType: examType,
+                    department: group['department']?.toString() ?? (isEnt ? 'ENT' : 'EYES'),
+                    examinationUuid: group['examination_uuid'],
+                    savedDiagram: group['items'],
+                    viewMode: true,
+                  ),
+                  icon: const Icon(Icons.visibility_rounded, size: 15),
+                  label: const Text('Full View'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.grey.shade700,
+                    textStyle: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
+  }
+
+  void _showEyeDiagramSelectorModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.cyanCalm.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.visibility_rounded, color: AppColors.cyanCalm, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Eye Anatomical Diagrams',
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                          ),
+                          Text(
+                            'Strictly Ophthalmology views for Eyes consultation',
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildDiagramSelectorTile(
+                  ctx,
+                  icon: Icons.remove_red_eye_rounded,
+                  color: AppColors.cyanCalm,
+                  title: 'Gross Examination',
+                  subtitle: 'External eye anatomy, eyelids, conjunctiva & sclera (View 1)',
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _openDrawingScreen(examType: 'eyes', department: 'EYES');
+                  },
+                ),
+                _buildDiagramSelectorTile(
+                  ctx,
+                  icon: Icons.blur_circular_rounded,
+                  color: const Color(0xFF6366F1),
+                  title: 'Fundoscopy',
+                  subtitle: 'Retina, optic disc, macula & vascular arcade (View 2)',
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _openDrawingScreen(examType: 'eyes', department: 'EYES');
+                  },
+                ),
+                _buildDiagramSelectorTile(
+                  ctx,
+                  icon: Icons.biotech_rounded,
+                  color: const Color(0xFF0D9488),
+                  title: 'Biomicroscopy',
+                  subtitle: 'Slit-lamp examination, anterior chamber, cornea & lens (View 3)',
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _openDrawingScreen(examType: 'eyes', department: 'EYES');
+                  },
+                ),
+                _buildDiagramSelectorTile(
+                  ctx,
+                  icon: Icons.draw_rounded,
+                  color: Colors.blueGrey,
+                  title: 'Blank Canvas',
+                  subtitle: 'Freehand ophthalmic drawing & clinical sketch',
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _openDrawingScreen(examType: 'drawing', department: 'EYES');
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showEntDiagramSelectorModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.hearing_rounded, color: Color(0xFFF59E0B), size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'ENT Anatomical Diagrams',
+                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                            ),
+                            Text(
+                              'Strictly Ear, Nose, Throat, Head & Neck views',
+                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDiagramSelectorTile(
+                    ctx,
+                    icon: Icons.hearing_rounded,
+                    color: const Color(0xFFF59E0B),
+                    title: 'Ears (Otology)',
+                    subtitle: 'Pinna, external auditory canal & tympanic membrane (Views 1-3)',
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _openDrawingScreen(examType: 'ears', department: 'ENT');
+                    },
+                  ),
+                  _buildDiagramSelectorTile(
+                    ctx,
+                    icon: Icons.air_rounded,
+                    color: const Color(0xFF10B981),
+                    title: 'Nose (Rhinology)',
+                    subtitle: 'Nasal cavity, septum, turbinates & sinuses (View 1)',
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _openDrawingScreen(examType: 'nose', department: 'ENT');
+                    },
+                  ),
+                  _buildDiagramSelectorTile(
+                    ctx,
+                    icon: Icons.coronavirus_rounded,
+                    color: const Color(0xFFEC4899),
+                    title: 'Throat / Laryngology',
+                    subtitle: 'Oropharynx, tonsils, larynx & vocal cords (Views 1-3)',
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _openDrawingScreen(examType: 'throat', department: 'ENT');
+                    },
+                  ),
+                  _buildDiagramSelectorTile(
+                    ctx,
+                    icon: Icons.face_rounded,
+                    color: const Color(0xFF3B82F6),
+                    title: 'Head (Cranial / Facial)',
+                    subtitle: 'Anterior & lateral cranial/facial views (Views 1-2)',
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _openDrawingScreen(examType: 'head', department: 'ENT');
+                    },
+                  ),
+                  _buildDiagramSelectorTile(
+                    ctx,
+                    icon: Icons.accessibility_new_rounded,
+                    color: const Color(0xFF8B5CF6),
+                    title: 'Neck (Cervical / Lymph Nodes)',
+                    subtitle: 'Anterior triangle, thyroid & cervical chain (View 1)',
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _openDrawingScreen(examType: 'neck', department: 'ENT');
+                    },
+                  ),
+                  _buildDiagramSelectorTile(
+                    ctx,
+                    icon: Icons.draw_rounded,
+                    color: Colors.blueGrey,
+                    title: 'Blank Canvas',
+                    subtitle: 'Freehand ENT diagram & clinical sketches',
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _openDrawingScreen(examType: 'drawing', department: 'ENT');
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDiagramSelectorTile(
+    BuildContext ctx, {
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: ListTile(
+        onTap: onTap,
+        dense: true,
+        leading: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.15),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(fontSize: 11),
+        ),
+        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: Colors.grey),
+      ),
+    );
+  }
+
+  Future<void> _openDrawingScreen({
+    required String examType,
+    required String department,
+    String? examinationUuid,
+    dynamic savedDiagram,
+    bool viewMode = false,
+  }) async {
+    final doctorProv = context.read<DoctorProvider>();
+    final patient = doctorProv.currentPatient;
+    if (patient == null) return;
+
+    final complaint = doctorProv.currentDeptRecord?.chiefComplaint ??
+        patient.chiefComplaint ??
+        widget.queueEntry?.purpose;
+    final hpi = doctorProv.currentDeptRecord?.historyOfPresentIllness ??
+        patient.historyOfPresentIllness;
+    final pmh = doctorProv.currentDeptRecord?.pmhSummaryText ??
+        patient.pastMedicalHistory;
+
+    await context.push(
+      '/nurse/drawing',
+      extra: {
+        'patientId': widget.patientId,
+        'patientName': patient.fullName,
+        'examType': examType,
+        'department': department,
+        'queueNumber': widget.queueEntry?.queueNumber,
+        'queueEntryId': widget.queueEntry?.id,
+        'examinationUuid': examinationUuid,
+        'savedDiagram': savedDiagram,
+        'viewMode': viewMode,
+        'chiefComplaint': complaint,
+        'historyOfPresentIllness': hpi,
+        'pastMedicalHistory': pmh,
+      },
+    );
+
+    if (mounted) {
+      await doctorProv.loadConsultation(
+        patientId: widget.patientId,
+        queueEntry: widget.queueEntry,
+      );
+    }
   }
 
   Widget _buildDiagramThumbnail(BuildContext context, ClinicalExamination exam) {

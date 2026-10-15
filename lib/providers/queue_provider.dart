@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../data/models/queue_entry.dart';
+import '../data/models/vital_signs.dart';
 import '../data/repositories/queue_repository.dart';
 import '../core/utils/helpers.dart';
 
@@ -13,6 +14,7 @@ class QueueProvider extends ChangeNotifier {
   final Map<String, QueueEntry?> _nowServing = {};
   final Map<String, Map<String, int>> _stats = {};
   bool _isLoading = false;
+  bool _initialized = false;
 
   List<QueueEntry> get todayQueue => _todayQueue;
   bool get isLoading => _isLoading;
@@ -25,6 +27,16 @@ class QueueProvider extends ChangeNotifier {
   List<QueueEntry> getWaiting(String department) =>
       getQueue(department).where((e) => e.isWaiting).toList();
 
+  /// Get entries currently called for triage/vital signs (1st Call)
+  List<QueueEntry> getTriage(String department) =>
+      getQueue(department).where((e) => e.isTriage).toList();
+
+  /// Get currently active triage entry (1st Call)
+  QueueEntry? getNowTriage(String department) {
+    final list = getTriage(department);
+    return list.isNotEmpty ? list.last : null;
+  }
+
   /// Get on-hold entries for a department
   List<QueueEntry> getOnHold(String department) =>
       getQueue(department).where((e) => e.isOnHold).toList();
@@ -33,7 +45,7 @@ class QueueProvider extends ChangeNotifier {
   List<QueueEntry> getCompleted(String department) =>
       getQueue(department).where((e) => e.isCompleted).toList();
 
-  /// Get currently serving for a department
+  /// Get currently serving for a department (2nd Call)
   QueueEntry? getNowServing(String department) => _nowServing[department];
 
   /// Get all entries currently serving in a department (across all doctors)
@@ -69,7 +81,8 @@ class QueueProvider extends ChangeNotifier {
           .where((e) => e.isWaiting)
           .toList();
 
-  /// Initialize and load today's queue
+  /// Initialize and load today's queue.
+  /// Safe to call multiple times — will not duplicate listeners.
   Future<void> initialize({bool forceRefresh = true}) async {
     _isLoading = true;
     notifyListeners();
@@ -77,9 +90,13 @@ class QueueProvider extends ChangeNotifier {
     _isLoading = false;
     notifyListeners();
 
-    _startDailyTimer();
+    if (_initialized) return; // guard against double-initialization
+    _initialized = true;
 
-    // Listen for realtime changes
+    _startDailyTimer();
+    _startPollingTimer();
+
+    // Listen for realtime changes (Supabase websocket)
     _repo.listenToChanges(() async {
       await _refreshAll(forceRefresh: true);
       notifyListeners();
@@ -137,6 +154,30 @@ class QueueProvider extends ChangeNotifier {
     return entry;
   }
 
+  /// 1st Call: Call patient for Vital Signs (Nurse Station intake)
+  Future<QueueEntry?> callForTriage(String entryId, {String? nurseName}) async {
+    final entry = await _repo.callForTriage(entryId, nurseName: nurseName);
+    await _refreshAll();
+    notifyListeners();
+    return entry;
+  }
+
+  /// Complete triage and return patient to waiting for doctor consultation (2nd call)
+  Future<QueueEntry?> completeTriage(String entryId, {VitalSigns? vitals, String? assistedBy}) async {
+    final entry = await _repo.completeTriage(entryId, vitals: vitals, assistedBy: assistedBy);
+    await _refreshAll();
+    notifyListeners();
+    return entry;
+  }
+
+  /// 2nd Call: Call a specific patient entry to consultation room / doctor
+  Future<QueueEntry?> callEntry(String entryId, {String? roomNumber, String? doctor}) async {
+    final entry = await _repo.callEntry(entryId, roomNumber: roomNumber, doctor: doctor);
+    await _refreshAll();
+    notifyListeners();
+    return entry;
+  }
+
   /// Mark patient as completed
   Future<void> markComplete(String entryId) async {
     await _repo.markComplete(entryId);
@@ -179,6 +220,17 @@ class QueueProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update vital signs for a queue entry
+  Future<void> updateEntryVitals(String entryId, VitalSigns vitals) async {
+    final entry = _todayQueue.where((e) => e.id == entryId).firstOrNull;
+    if (entry != null) {
+      final updated = entry.copyWith(vitalSigns: vitals);
+      await _repo.updateEntry(updated);
+      await _refreshAll();
+      notifyListeners();
+    }
+  }
+
   /// Get archived queue entries from past dates
   Future<List<QueueEntry>> getArchivedEntries({
     String? dateKey,
@@ -219,9 +271,22 @@ class QueueProvider extends ChangeNotifier {
     });
   }
 
+  Timer? _pollingTimer;
+
+  /// Polling fallback: refresh every 2 seconds so all screens update in real-time.
+  void _startPollingTimer() {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      await _refreshAll(forceRefresh: true);
+      notifyListeners();
+    });
+  }
+
   @override
   void dispose() {
     _dailyCheckTimer?.cancel();
+    _pollingTimer?.cancel();
+    _repo.cancelListener();
     super.dispose();
   }
 

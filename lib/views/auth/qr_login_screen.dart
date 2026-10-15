@@ -9,6 +9,7 @@ import '../../providers/admin_provider.dart';
 import '../../providers/doctor_provider.dart';
 import '../../shared/widgets/olof_logo.dart';
 import '../../shared/widgets/super_admin_department_dialog.dart';
+import '../../shared/widgets/admin_password_dialog.dart';
 
 // =============================================================================
 // [PRODUCTION FEATURE - QR LOGIN SCREEN]
@@ -514,7 +515,7 @@ class _QrLoginScreenState extends State<QrLoginScreen>
         // Security policy note
         Text(
           _isStrictSuperAdmin
-              ? 'Admin Policy: Only verified Master Super Administrator QR credentials will unlock this workstation.'
+              ? 'Admin Policy: Master Super Administrator password or QR credentials will unlock this workstation.'
               : 'Security Policy: Only verified Staff QR credentials will unlock clinical stations.',
           textAlign: TextAlign.center,
           style: TextStyle(
@@ -523,6 +524,23 @@ class _QrLoginScreenState extends State<QrLoginScreen>
             fontStyle: FontStyle.italic,
           ),
         ),
+
+        if (_isStrictSuperAdmin) ...[
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: () => showAdminPasswordLogin(context),
+            icon: const Icon(Icons.lock_open_rounded, size: 18),
+            label: const Text('Enter Admin Password'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF059669),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

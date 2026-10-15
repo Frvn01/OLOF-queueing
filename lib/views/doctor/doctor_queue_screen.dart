@@ -8,6 +8,7 @@ import '../../data/models/queue_entry.dart';
 import '../../data/models/vital_signs.dart';
 import '../../providers/doctor_provider.dart';
 import '../../providers/queue_provider.dart';
+import '../../shared/widgets/doctor_switcher_dialog.dart';
 
 class DoctorQueueScreen extends StatefulWidget {
   const DoctorQueueScreen({super.key});
@@ -79,6 +80,18 @@ class _DoctorQueueScreenState extends State<DoctorQueueScreen> with SingleTicker
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Switch Doctor Profile (Click or Scan QR)',
+            icon: const Icon(Icons.switch_account_rounded),
+            onPressed: () => DoctorSwitcherDialog.show(context),
+          ),
+          IconButton(
+            tooltip: 'Refresh Queue Data',
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () => queueProv.initialize(forceRefresh: true),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(104),
           child: Column(
@@ -366,6 +379,56 @@ class _DoctorQueueScreenState extends State<DoctorQueueScreen> with SingleTicker
               ],
             ),
 
+            // ── Assigned Doctor & Room ────────────────────────────────
+            if (entry.assignedDoctor != null && entry.assignedDoctor!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.medical_services_rounded, size: 13, color: themeColor.withValues(alpha: 0.8)),
+                    const SizedBox(width: 4),
+                    Text(
+                      DoctorHelper.formatName(entry.assignedDoctor!),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: themeColor,
+                      ),
+                    ),
+                    if (entry.assignedRoom != null && entry.assignedRoom!.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Icon(Icons.room_rounded, size: 12, color: Colors.grey.shade500),
+                      const SizedBox(width: 3),
+                      Text(
+                        entry.assignedRoom!,
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+            if (entry.isTriage)
+              Container(
+                margin: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEC4899).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFEC4899).withValues(alpha: 0.4)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.monitor_heart_rounded, size: 14, color: Color(0xFFEC4899)),
+                    SizedBox(width: 6),
+                    Text(
+                      '1st Call Active: Currently at Nurse Station for Vitals',
+                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFFEC4899)),
+                    ),
+                  ],
+                ),
+              ),
+
             // ── Vital Signs Row (from DoctorVisitQueue.jsx) ───────────
             _buildVitalsSummaryRow(entry.vitalSigns),
 
@@ -419,7 +482,7 @@ class _DoctorQueueScreenState extends State<DoctorQueueScreen> with SingleTicker
                       }
                     },
                     icon: const Icon(Icons.meeting_room_rounded, size: 16),
-                    label: const Text('Call into Room & Consult'),
+                    label: const Text('2nd Call: Enter Doctor Room'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isNext ? const Color(0xFFF59E0B) : themeColor,
                       foregroundColor: Colors.white,

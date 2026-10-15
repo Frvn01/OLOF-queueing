@@ -84,180 +84,195 @@ class AdminDashboardScreen extends StatelessWidget {
           const SizedBox(height: 28),
 
           // ── Active Doctor Rooms & Departments Row ─────────────
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Active Rooms Card
-              Expanded(
-                flex: 3,
-                child: Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.15)),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.meeting_room_rounded, color: AppColors.primary, size: 22),
-                            const SizedBox(width: 10),
-                            const Text(
-                              'Consultation Rooms Status',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        _buildRoomTile(
-                          roomName: 'ENT ROOM 1',
-                          doctorName: entDoctor,
-                          department: AppConstants.deptEnt,
-                          servingEntry: adminProv.getDoctorServing(
-                            todayQueue,
-                            entDoctor,
-                            AppConstants.deptEnt,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth > 1050;
+
+              final roomsCard = Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.15)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.meeting_room_rounded, color: AppColors.primary, size: 22),
+                          const SizedBox(width: 10),
+                          const Text(
+                            'Consultation Rooms Status',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                           ),
-                          waitingCount: todayQueue
-                              .where((e) => (e.isWaiting || e.isOnHold) && e.department == AppConstants.deptEnt)
-                              .length,
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _buildRoomTile(
+                        roomName: 'ENT ROOM 1',
+                        doctorName: entDoctor,
+                        department: AppConstants.deptEnt,
+                        servingEntry: adminProv.getDoctorServing(
+                          todayQueue,
+                          entDoctor,
+                          AppConstants.deptEnt,
                         ),
-                        const Divider(height: 24),
-                        _buildRoomTile(
-                          roomName: 'OPHTHA ROOM 1',
-                          doctorName: eyesDoctor,
-                          department: AppConstants.deptEyes,
-                          servingEntry: adminProv.getDoctorServing(
-                            todayQueue,
-                            eyesDoctor,
-                            AppConstants.deptEyes,
-                          ),
-                          waitingCount: todayQueue
-                              .where((e) => (e.isWaiting || e.isOnHold) && e.department == AppConstants.deptEyes)
-                              .length,
+                        waitingCount: todayQueue
+                            .where((e) => (e.isWaiting || e.isOnHold) && e.department == AppConstants.deptEnt)
+                            .length,
+                      ),
+                      const Divider(height: 24),
+                      _buildRoomTile(
+                        roomName: 'OPHTHA ROOM 1',
+                        doctorName: eyesDoctor,
+                        department: AppConstants.deptEyes,
+                        servingEntry: adminProv.getDoctorServing(
+                          todayQueue,
+                          eyesDoctor,
+                          AppConstants.deptEyes,
                         ),
-                        const Divider(height: 24),
-                        _buildRoomTile(
-                          roomName: 'OPHTHA ROOM 2',
-                          doctorName: 'Dr. DR. AMELIA REYES VERA CRUZ',
-                          department: AppConstants.deptEyes,
-                          servingEntry: null,
-                          waitingCount: 0,
-                          isStandby: true,
-                        ),
-                      ],
-                    ),
+                        waitingCount: todayQueue
+                            .where((e) => (e.isWaiting || e.isOnHold) && e.department == AppConstants.deptEyes)
+                            .length,
+                      ),
+                      const Divider(height: 24),
+                      _buildRoomTile(
+                        roomName: 'OPHTHA ROOM 2',
+                        doctorName: 'Dr. DR. AMELIA REYES VERA CRUZ',
+                        department: AppConstants.deptEyes,
+                        servingEntry: null,
+                        waitingCount: 0,
+                        isStandby: true,
+                      ),
+                    ],
                   ),
                 ),
-              ),
+              );
 
-              const SizedBox(width: 20),
-
-              // Department Breakdown & Local Storage Info
-              Expanded(
-                flex: 2,
-                child: Column(
-                  children: [
-                    // Department Breakdown
-                    Card(
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.15)),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Row(
-                              children: [
-                                Icon(Icons.pie_chart_rounded, color: Color(0xFF0D9488), size: 22),
-                                SizedBox(width: 10),
-                                Text(
-                                  'Department Split',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 18),
-                            _buildDeptBar(
-                              name: 'ENT Department',
-                              count: entQueue.length,
-                              total: totalQueued,
-                              color: AppColors.entPrimary,
-                            ),
-                            const SizedBox(height: 14),
-                            _buildDeptBar(
-                              name: 'Eyes (Ophthalmology)',
-                              count: eyesQueue.length,
-                              total: totalQueued,
-                              color: AppColors.eyesPrimary,
-                            ),
-                          ],
-                        ),
+              final sideColumn = Column(
+                children: [
+                  // Department Breakdown
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.15)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.pie_chart_rounded, color: Color(0xFF0D9488), size: 22),
+                              SizedBox(width: 10),
+                              Text(
+                                'Department Split',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          _buildDeptBar(
+                            name: 'ENT Department',
+                            count: entQueue.length,
+                            total: totalQueued,
+                            color: AppColors.entPrimary,
+                          ),
+                          const SizedBox(height: 14),
+                          _buildDeptBar(
+                            name: 'Eyes (Ophthalmology)',
+                            count: eyesQueue.length,
+                            total: totalQueued,
+                            color: AppColors.eyesPrimary,
+                          ),
+                        ],
                       ),
                     ),
+                  ),
 
-                    const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-                    // Local Storage & Backup Widget
-                    Card(
-                      elevation: 0,
-                      color: const Color(0xFF0F172A).withValues(alpha: 0.04),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.15)),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Row(
-                              children: [
-                                Icon(Icons.shield_rounded, color: AppColors.success, size: 20),
-                                SizedBox(width: 8),
-                                Text(
+                  // Local Storage & Backup Widget
+                  Card(
+                    elevation: 0,
+                    color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.15)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.shield_rounded, color: AppColors.success, size: 20),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
                                   'Local PC Storage (Option A)',
                                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Drawings and photos are saved directly to this clinic PC. Cloud storage quota: Protected (0% consumed).',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Theme.of(context).textTheme.bodySmall?.color,
                               ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Drawings and photos are saved directly to this clinic PC. Cloud storage quota: Protected (0% consumed).',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context).textTheme.bodySmall?.color,
                             ),
-                            const SizedBox(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Used on Disk: ${adminProv.storageStats['formattedSize'] ?? 'Scanning...'}',
-                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-                                ),
-                                TextButton.icon(
-                                  onPressed: () => adminProv.setNavigationIndex(4),
-                                  icon: const Icon(Icons.arrow_forward_rounded, size: 14),
-                                  label: const Text('Manage', style: TextStyle(fontSize: 12)),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            alignment: WrapAlignment.spaceBetween,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              Text(
+                                'Used on Disk: ${adminProv.storageStats['formattedSize'] ?? 'Scanning...'}',
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                              ),
+                              TextButton.icon(
+                                onPressed: () => adminProv.setNavigationIndex(4),
+                                icon: const Icon(Icons.arrow_forward_rounded, size: 14),
+                                label: const Text('Manage', style: TextStyle(fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
+                  ),
+                ],
+              );
+
+              if (isWide) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 3, child: roomsCard),
+                    const SizedBox(width: 20),
+                    Expanded(flex: 2, child: sideColumn),
                   ],
-                ),
-              ),
-            ],
+                );
+              }
+              return Column(
+                children: [
+                  roomsCard,
+                  const SizedBox(height: 20),
+                  sideColumn,
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -355,54 +370,63 @@ class AdminDashboardScreen extends StatelessWidget {
               Text(
                 roomName,
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                overflow: TextOverflow.ellipsis,
               ),
               Text(
                 doctorName,
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
         ),
-        if (servingEntry != null) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.success.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.success.withValues(alpha: 0.4)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.fiber_manual_record, size: 8, color: AppColors.success),
-                const SizedBox(width: 6),
-                Text(
-                  'Serving ${servingEntry.queueNumber}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                    color: AppColors.success,
-                  ),
+        const SizedBox(width: 8),
+        // Constrain trailing section so it never overflows
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (servingEntry != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.success.withValues(alpha: 0.4)),
                 ),
-              ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.fiber_manual_record, size: 7, color: AppColors.success),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Q${servingEntry.queueNumber}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                        color: AppColors.success,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  isStandby ? 'Standby' : 'Free',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ),
+            const SizedBox(height: 2),
+            Text(
+              '$waitingCount waiting',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
             ),
-          ),
-        ] else ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.grey.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              isStandby ? 'Standby' : 'Available',
-              style: const TextStyle(fontSize: 11, color: Colors.grey),
-            ),
-          ),
-        ],
-        const SizedBox(width: 16),
-        Text(
-          '$waitingCount waiting',
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+          ],
         ),
       ],
     );
@@ -421,9 +445,21 @@ class AdminDashboardScreen extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-            Text('$count patients (${(pct * 100).toStringAsFixed(0)}%)',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            Expanded(
+              child: Text(
+                name,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                '$count (${(pct * 100).toStringAsFixed(0)}%)',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 6),

@@ -414,28 +414,123 @@ class _ReceptionistScreenState extends State<ReceptionistScreen> {
               ),
             ),
             const SizedBox(height: 10),
-            TextField(
-              controller: _searchController,
-              onChanged: (v) => provider.search(v),
-              style: TextStyle(
-                color: titleColor,
-                fontWeight: FontWeight.w700,
-              ),
-              decoration: InputDecoration(
-                hintText: 'Search by patient name or OLOF ID...',
-                prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        onPressed: () {
-                          _searchController.clear();
-                          provider.search('');
-                        },
-                        icon: const Icon(Icons.clear_rounded),
-                      )
-                    : null,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (v) {
+                      setState(() {});
+                      provider.search(v);
+                    },
+                    onSubmitted: (v) => provider.search(v),
+                    textInputAction: TextInputAction.search,
+                    style: TextStyle(
+                      color: titleColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Search by patient name, ID, or phone...',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              onPressed: () {
+                                _searchController.clear();
+                                provider.search('');
+                                setState(() {});
+                              },
+                              icon: const Icon(Icons.clear_rounded),
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: provider.isSearching
+                      ? null
+                      : () => provider.search(_searchController.text),
+                  icon: provider.isSearching
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.search_rounded, size: 18),
+                  label: Text(provider.isSearching ? 'Searching...' : 'Search'),
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isCompact ? 12 : 18,
+                      vertical: 14,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            if (provider.searchResults.isNotEmpty) ...[
+            if (provider.isSearching) ...[
+              const SizedBox(height: 10),
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Searching patients...',
+                        style: TextStyle(
+                          color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ] else if (provider.searchQuery.trim().isNotEmpty && provider.searchResults.isEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor, width: 1.2),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.person_off_rounded,
+                      color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'No registered patient found matching "${provider.searchQuery}".',
+                        style: TextStyle(
+                          color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => context.go('/receptionist/register'),
+                      child: const Text('Register New', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (provider.searchResults.isNotEmpty) ...[
               const SizedBox(height: 10),
               Container(
                 constraints: const BoxConstraints(maxHeight: 280),

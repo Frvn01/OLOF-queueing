@@ -91,14 +91,21 @@ class _NurseDrawingScreenState extends State<NurseDrawingScreen> {
     return sx < sy ? sx : sy;
   }
 
+  bool get _isEyeDepartment {
+    final dept = widget.department.trim().toUpperCase();
+    return dept == 'EYES' || dept == 'EYE' || dept == 'OPHTHALMOLOGY';
+  }
+
   List<String> _getAvailableViews() {
+    if (_isEyeDepartment) {
+      // Strictly ophthalmic views: 1 (Gross Exam), 2 (Fundoscopy), 3 (Biomicroscopy), drawing (Blank)
+      return ['1', '2', '3', 'drawing'];
+    }
+
+    // Strictly ENT Views
     final lower = widget.examType.toLowerCase();
     final List<String> views;
     switch (lower) {
-      case 'eye':
-      case 'eyes':
-        views = ['1', '2', '3'];
-        break;
       case 'ear':
       case 'ears':
         views = ['1', '2', '3'];
@@ -117,10 +124,12 @@ class _NurseDrawingScreenState extends State<NurseDrawingScreen> {
         break;
       case 'drawing':
       default:
-        views = [];
+        views = ['1', '2', '3'];
         break;
     }
-    views.add('drawing');
+    if (!views.contains('drawing')) {
+      views.add('drawing');
+    }
     return views;
   }
 
@@ -174,10 +183,8 @@ class _NurseDrawingScreenState extends State<NurseDrawingScreen> {
   List<String> _getDiagramPathsForView(String view) {
     if (view == 'drawing') return [];
 
-    final examLower = widget.examType.toLowerCase();
-    final capitalized = examLower[0].toUpperCase() + examLower.substring(1);
-
-    if (examLower == 'eyes' || examLower == 'eye') {
+    if (_isEyeDepartment) {
+      // Strictly Eye diagrams
       final names = ['GrossExam', 'Fundoscopy', 'Biomicroscopy'];
       final idx = (int.tryParse(view) ?? 1) - 1;
       final safeIdx = idx.clamp(0, names.length - 1);
@@ -188,6 +195,13 @@ class _NurseDrawingScreenState extends State<NurseDrawingScreen> {
       ];
     }
 
+    // Strictly ENT diagrams — prevent any eye diagrams from leaking into ENT
+    var examLower = widget.examType.toLowerCase();
+    if (examLower == 'eyes' || examLower == 'eye') {
+      examLower = 'ears';
+    }
+
+    final capitalized = examLower[0].toUpperCase() + examLower.substring(1);
     String prefix = capitalized;
     if (examLower == 'ear' || examLower == 'ears') {
       prefix = 'Ears';
@@ -359,15 +373,15 @@ class _NurseDrawingScreenState extends State<NurseDrawingScreen> {
             examinationUuid: sessionUuid,
             patientId: widget.patientId,
             queueEntryId: widget.queueEntryId,
-            department: widget.department,
-            examType: widget.examType.toUpperCase(),
+            department: _isEyeDepartment ? 'EYES' : 'ENT',
+            examType: _isEyeDepartment ? 'EYES' : widget.examType.toUpperCase(),
             viewName: view,
             annotations: viewAnnotations,
             imageUrl: view == _currentView ? uploadedImageUrl : null,
             clinicalFindings: _notesController.text.trim().isNotEmpty
                 ? _notesController.text.trim()
                 : null,
-            deviceInfo: 'OLOF Clinical Station ($view)',
+            deviceInfo: 'OLOF Consultation (${_isEyeDepartment ? "EYES" : "ENT"} - $view)',
           ),
         );
       }
@@ -496,17 +510,18 @@ class _NurseDrawingScreenState extends State<NurseDrawingScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: availableViews.map((v) {
                             final isSelected = v == _currentView;
+                            final activeColor = _isEyeDepartment ? const Color(0xFF0D9488) : const Color(0xFFEC4899);
                             return InkWell(
                               onTap: () => _switchView(v),
                               borderRadius: BorderRadius.circular(8),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
-                                  color: isSelected ? const Color(0xFFEC4899) : Colors.transparent,
+                                  color: isSelected ? activeColor : Colors.transparent,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
-                                  v == 'drawing' ? 'Blank' : 'View $v',
+                                  _getViewShortName(v),
                                   style: TextStyle(
                                     fontSize: 11.5,
                                     fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
@@ -530,10 +545,12 @@ class _NurseDrawingScreenState extends State<NurseDrawingScreen> {
                       isLabelVisible: _notesController.text.isNotEmpty,
                       child: Icon(
                         _isNotesPanelOpen ? Icons.notes_rounded : Icons.description_outlined,
-                        color: _isNotesPanelOpen ? const Color(0xFFEC4899) : subtitleColor,
+                        color: _isNotesPanelOpen
+                            ? (_isEyeDepartment ? const Color(0xFF0D9488) : const Color(0xFFEC4899))
+                            : subtitleColor,
                       ),
                     ),
-                    tooltip: 'Nurse Clinical Findings',
+                    tooltip: 'Clinical Findings & Notes',
                     onPressed: () => setState(() => _isNotesPanelOpen = !_isNotesPanelOpen),
                   ),
 
@@ -555,9 +572,9 @@ class _NurseDrawingScreenState extends State<NurseDrawingScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
                           : const Icon(Icons.cloud_upload_rounded, size: 18),
-                      label: Text(_isSaving ? 'Saving...' : 'Save to Cloud'),
+                      label: Text(_isSaving ? 'Saving...' : 'Save to Record'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFEC4899),
+                        backgroundColor: _isEyeDepartment ? const Color(0xFF0D9488) : const Color(0xFFEC4899),
                         foregroundColor: Colors.white,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -648,11 +665,50 @@ class _NurseDrawingScreenState extends State<NurseDrawingScreen> {
 
   String _getViewLabel(String view) {
     if (view == 'drawing') return 'Blank Canvas';
+    if (_isEyeDepartment) {
+      if (view == '1') return 'Gross Exam (External Eye)';
+      if (view == '2') return 'Fundoscopy (Retina / Optic Disc)';
+      if (view == '3') return 'Biomicroscopy (Slit Lamp)';
+      return 'Eye View $view';
+    }
+
     final lower = widget.examType.toLowerCase();
-    if (lower == 'eyes' || lower == 'eye') {
+    if (lower == 'ear' || lower == 'ears') {
+      if (view == '1') return 'Pinna / External Ear';
+      if (view == '2') return 'Ear Canal';
+      if (view == '3') return 'Tympanic Membrane';
+    } else if (lower == 'nose') {
+      if (view == '1') return 'Nasal Cavity & Septum';
+    } else if (lower == 'throat') {
+      if (view == '1') return 'Oropharynx & Tonsils';
+      if (view == '2') return 'Hypopharynx';
+      if (view == '3') return 'Larynx / Vocal Cords';
+    } else if (lower == 'head') {
+      if (view == '1') return 'Anterior Head / Face';
+      if (view == '2') return 'Lateral Head / Face';
+    } else if (lower == 'neck') {
+      if (view == '1') return 'Cervical & Thyroid';
+    }
+    return 'View $view';
+  }
+
+  String _getViewShortName(String view) {
+    if (view == 'drawing') return 'Blank';
+    if (_isEyeDepartment) {
       if (view == '1') return 'Gross Exam';
       if (view == '2') return 'Fundoscopy';
       if (view == '3') return 'Biomicroscopy';
+      return 'View $view';
+    }
+    final lower = widget.examType.toLowerCase();
+    if (lower == 'ear' || lower == 'ears') {
+      if (view == '1') return 'Pinna';
+      if (view == '2') return 'Canal';
+      if (view == '3') return 'Tympanic';
+    } else if (lower == 'throat') {
+      if (view == '1') return 'Oropharynx';
+      if (view == '2') return 'Hypopharynx';
+      if (view == '3') return 'Larynx';
     }
     return 'View $view';
   }

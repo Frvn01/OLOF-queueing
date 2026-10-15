@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:storage_client/storage_client.dart';
 import '../models/clinical_examination.dart';
 import '../services/supabase_service.dart';
 import '../services/local_storage_service.dart';
@@ -99,49 +98,24 @@ class ExaminationRepository {
     return result;
   }
 
-  /// Upload diagram PNG image bytes.
-  /// Under Option A (Hybrid), it saves locally to Clinic PC storage to save cloud bucket quota.
+  /// Save diagram PNG image bytes.
+  /// Under Option A (Local Storage), saves directly to the Clinic PC hard drive
+  /// or returns a data URI, completely bypassing Supabase Cloud Storage.
   Future<String?> uploadDiagramImage({
     required String examinationUuid,
     required String viewName,
     required Uint8List bytes,
   }) async {
-    // 1. Always save a copy locally on Clinic PC
-    String? localPath;
     try {
-      localPath = await LocalStorageService.instance.saveDiagramLocally(
+      final localPath = await LocalStorageService.instance.saveDiagramLocally(
         examinationUuid: examinationUuid,
         viewName: viewName,
         bytes: bytes,
       );
+      debugPrint('Clinical diagram saved to local Clinic PC storage: $localPath');
+      return localPath;
     } catch (e) {
-      debugPrint('Local diagram save note: $e');
-    }
-
-    if (!isSupabase) {
-      return localPath ?? 'data:image/png;base64,${base64Encode(bytes)}';
-    }
-
-    try {
-      final storagePath = 'examinations/$examinationUuid/view_$viewName.png';
-      await SupabaseService.client.storage
-          .from('clinical-diagrams')
-          .uploadBinary(
-            storagePath,
-            bytes,
-            fileOptions: const FileOptions(
-              upsert: true,
-              contentType: 'image/png',
-            ),
-          );
-
-      final publicUrl = SupabaseService.client.storage
-          .from('clinical-diagrams')
-          .getPublicUrl(storagePath);
-      return publicUrl;
-    } catch (e) {
-      debugPrint('Supabase storage upload error (using data URI fallback): $e');
-      // If bucket does not exist, exceeds quota or upload fails, fallback to inline base64 so all clients can display it
+      debugPrint('Local diagram save error (fallback to data URI): $e');
       return 'data:image/png;base64,${base64Encode(bytes)}';
     }
   }

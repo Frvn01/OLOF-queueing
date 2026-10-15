@@ -7,6 +7,9 @@ import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../shared/widgets/olof_logo.dart';
 import '../../providers/theme_provider.dart';
+import '../../shared/widgets/doctor_switcher_dialog.dart';
+import '../../shared/widgets/admin_password_dialog.dart';
+import '../../shared/widgets/tv_display_overlay.dart';
 
 // =============================================================================
 // [PRODUCTION FEATURE - QR CODE SCANNER LOGIN]
@@ -539,7 +542,7 @@ class _LandingScreenState extends State<LandingScreen>
       _StationData(
         title: 'Doctor',
         roleBadge: 'ROOMS 1–3',
-        subtitle: 'Consultations, patient symptoms, vitals & drawings',
+        subtitle: 'Consultations, patient vitals, diagnosis & anatomical drawings',
         icon: Icons.medical_services_rounded,
         gradient: const LinearGradient(
           colors: [Color(0xFF059669), Color(0xFF047857)],
@@ -552,7 +555,7 @@ class _LandingScreenState extends State<LandingScreen>
       _StationData(
         title: 'Nurse',
         roleBadge: 'TRIAGE & VITALS',
-        subtitle: 'Patient triage, vital signs & clinical eye/ENT drawings',
+        subtitle: 'Patient triage intake, general & ophthalmic vital signs',
         icon: Icons.medical_information_rounded,
         gradient: const LinearGradient(
           colors: [Color(0xFFEC4899), Color(0xFFBE185D)],
@@ -576,10 +579,10 @@ class _LandingScreenState extends State<LandingScreen>
         route: '/receptionist',
       ),
       _StationData(
-        title: 'Ophtha Dept',
-        roleBadge: 'SPECIALIST DEPT',
-        subtitle: 'Ophthalmology queue, call patients & assign exam rooms',
-        icon: Icons.visibility_rounded,
+        title: 'Clinic Coordinator',
+        roleBadge: 'MASTER CALLER',
+        subtitle: '1st Call (Nurse Station Vitals) & 2nd Call (Doctor Rooms), queue flow & oversight',
+        icon: Icons.campaign_rounded,
         gradient: const LinearGradient(
           colors: [Color(0xFF0D9488), Color(0xFF0F766E)],
           begin: Alignment.topLeft,
@@ -686,9 +689,10 @@ class _LandingScreenState extends State<LandingScreen>
       title: 'Public TV Queue Display',
       badgeText: 'LIVE SCREEN',
       badgeColor: AppColors.success,
-      subtitle:
-          'Live full-screen waiting room monitor with doctor callouts & audio chime for waiting patients.',
-      actionText: 'Launch TV Display',
+      subtitle: isDesktopWidth
+          ? 'Launch a separate TV window (multi-screen) or in-app overlay. Workstation stays active.'
+          : 'Live full-screen waiting room monitor with doctor callouts & audio chime for waiting patients.',
+      actionText: isDesktopWidth ? 'Launch TV Screen' : 'Launch TV Display',
       icon: Icons.tv_rounded,
       gradient: const LinearGradient(
         colors: [Color(0xFF1E3A8A), Color(0xFF0284C7)],
@@ -698,16 +702,16 @@ class _LandingScreenState extends State<LandingScreen>
       accentColor: const Color(0xFF0284C7),
       isDark: isDark,
       isMobile: isMobile,
-      onTap: () => _navigateTo(context, '/display'),
+      onTap: () => launchTvDisplayOverlay(context, isDesktop: isDesktopWidth),
     );
 
     final adminCard = _OperationsCard(
       title: 'Admin Workstation',
-      badgeText: 'QR REQUIRED',
+      badgeText: 'PASSWORD REQUIRED',
       badgeColor: const Color(0xFFD97706),
       subtitle:
-          'Room-by-room doctor oversight, staff management & reports. Super-admin QR badge required.',
-      actionText: 'Scan QR to Unlock',
+          'Room-by-room doctor oversight, staff management & reports. Admin password required to unlock.',
+      actionText: 'Enter Password to Unlock',
       icon: Icons.admin_panel_settings_rounded,
       gradient: const LinearGradient(
         colors: [Color(0xFF065F46), Color(0xFF0D9488)],
@@ -717,11 +721,7 @@ class _LandingScreenState extends State<LandingScreen>
       accentColor: const Color(0xFF059669),
       isDark: isDark,
       isMobile: isMobile,
-      // Admin strictly requires Master Super Admin QR — pass role hint to enforce strict auth
-      onTap: () {
-        HapticFeedback.lightImpact();
-        context.push('/auth/qr-login?role=super_admin');
-      },
+      onTap: () => showAdminPasswordLogin(context),
     );
 
     // Desktop: 2 Cards side-by-side
@@ -798,6 +798,10 @@ class _LandingScreenState extends State<LandingScreen>
 
   void _navigateTo(BuildContext context, String route) {
     HapticFeedback.lightImpact();
+    if (route == '/doctor') {
+      DoctorSwitcherDialog.show(context, navigateToDoctorOnSelect: true);
+      return;
+    }
     context.go(route);
   }
 }

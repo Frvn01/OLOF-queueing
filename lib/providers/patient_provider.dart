@@ -15,6 +15,7 @@ class PatientProvider extends ChangeNotifier {
   List<VisitRecord> _selectedPatientVisits = [];
   bool _isLoading = false;
   bool _visitsLoading = false;
+  bool _isSearching = false;
   String _searchQuery = '';
 
   List<Patient> get patients => _patients;
@@ -23,6 +24,7 @@ class PatientProvider extends ChangeNotifier {
   List<VisitRecord> get selectedPatientVisits => _selectedPatientVisits;
   bool get isLoading => _isLoading;
   bool get visitsLoading => _visitsLoading;
+  bool get isSearching => _isSearching;
   String get searchQuery => _searchQuery;
 
   /// Initialize and load patients
@@ -45,10 +47,15 @@ class PatientProvider extends ChangeNotifier {
     _searchQuery = query;
     if (query.trim().isEmpty) {
       _searchResults = [];
+      _isSearching = false;
+      notifyListeners();
     } else {
+      _isSearching = true;
+      notifyListeners();
       _searchResults = await _repo.searchPatients(query);
+      _isSearching = false;
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   /// Select a patient for viewing — loads cached data immediately, then

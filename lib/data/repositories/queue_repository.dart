@@ -1,16 +1,52 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/queue_entry.dart';
+import '../models/vital_signs.dart';
 import '../services/supabase_service.dart';
 import '../../core/utils/helpers.dart';
 
 /// Queue CRUD operations — Supabase with in-memory fallback
 class QueueRepository {
-  final List<QueueEntry> _entries = [];
-  bool _loaded = false;
-  String _lastLoadedDateKey = '';
+  static final List<QueueEntry> _entries = [];
+  static bool _loaded = false;
+  static String _lastLoadedDateKey = '';
   // Counter key format: 'DEPT::DoctorName::YYYY-MM-DD' for per-doctor numbering
   // Fallback key: 'DEPT::_nodoc::YYYY-MM-DD' when no doctor assigned
-  final Map<String, int> _counters = {};
+  static final Map<String, int> _counters = {};
+
+  static const _queueVitalsStorageKey = 'cached_queue_vitals_v1';
+  static final Map<String, Map<String, dynamic>> _queueVitalsCache = {};
+  static bool _queueVitalsCacheLoaded = false;
+
+  static Future<void> _ensureQueueVitalsLoaded() async {
+    if (_queueVitalsCacheLoaded) return;
+    _queueVitalsCacheLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_queueVitalsStorageKey);
+      if (raw != null) {
+        final Map<String, dynamic> decoded = jsonDecode(raw);
+        decoded.forEach((key, val) {
+          if (val is Map) {
+            _queueVitalsCache[key] = Map<String, dynamic>.from(val);
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('QueueRepository vitals cache load error: $e');
+    }
+  }
+
+  static Future<void> _persistQueueVitalsCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_queueVitalsStorageKey, jsonEncode(_queueVitalsCache));
+    } catch (e) {
+      debugPrint('QueueRepository vitals persist error: $e');
+    }
+  }
 
   bool get isSupabase => SupabaseService.isConfigured;
 
@@ -27,7 +63,7 @@ class QueueRepository {
   /// Get queue for a specific department (today only)
   Future<List<QueueEntry>> getDepartmentQueue(String department, {bool forceRefresh = false}) async {
     final queue = await getTodayQueue(forceRefresh: forceRefresh);
-    return queue.where((e) => e.department == department).toList();
+    return queue.where((e) => e.department.toUpperCase() == department.toUpperCase()).toList();
   }
 
   /// Get waiting entries for a department
@@ -129,8 +165,15 @@ class QueueRepository {
     if (docWaiting.isEmpty) return null;
 
     final next = docWaiting.first;
+    final doctorRoom = (next.assignedRoom != null &&
+            next.assignedRoom!.trim().isNotEmpty &&
+            next.assignedRoom!.trim().toLowerCase() != 'nurse station')
+        ? next.assignedRoom
+        : DoctorHelper.getDoctorRoom(doctorName, department: department);
     final updated = next.copyWith(
       status: 'serving',
+      assignedRoom: doctorRoom,
+      assignedDoctor: doctorName,
       calledAt: DateTime.now(),
     );
     return updateEntry(updated);
@@ -144,11 +187,21 @@ class QueueRepository {
 
   /// Update a queue entry's status
   Future<QueueEntry> updateEntry(QueueEntry entry) async {
+    await _ensureQueueVitalsLoaded();
+    if (entry.vitalSigns != null) {
+      _queueVitalsCache[entry.id] = entry.vitalSigns!.toJson();
+      _persistQueueVitalsCache();
+    }
+
     if (isSupabase) {
       try {
+        final payload = Map<String, dynamic>.from(entry.toSupabaseJson());
+        if (entry.vitalSigns != null) {
+          payload['vital_signs'] = entry.vitalSigns!.toJson();
+        }
         await SupabaseService.client
             .from('queue_entries')
-            .update(entry.toSupabaseJson())
+            .update(payload)
             .eq('id', entry.id);
       } catch (e) {
         debugPrint('Supabase queue update error: $e');
@@ -159,6 +212,7 @@ class QueueRepository {
           if (match != null) {
             payload.remove(match.group(1));
           }
+          payload.remove('vital_signs');
           if (errStr.contains('assigned_doctor')) {
             payload.remove('assigned_doctor');
           }
@@ -187,22 +241,98 @@ class QueueRepository {
     if (waitingOnly.isEmpty) return null;
 
     final next = waitingOnly.first;
-    // Use patient's pre-assigned room and doctor from check-in
+    // Use patient's pre-assigned room or designated doctor room from check-in
+    final doctorRoom = (next.assignedRoom != null &&
+            next.assignedRoom!.trim().isNotEmpty &&
+            next.assignedRoom!.trim().toLowerCase() != 'nurse station')
+        ? next.assignedRoom
+        : DoctorHelper.getDoctorRoom(next.assignedDoctor, department: department);
     final updated = next.copyWith(
       status: 'serving',
+      assignedRoom: doctorRoom,
       calledAt: DateTime.now(),
     );
     return updateEntry(updated);
   }
 
-  /// Call a specific patient entry into a consultation room
-  Future<QueueEntry> callEntry(String entryId, {String? roomNumber, String? doctor}) async {
-    final idx = _entries.indexWhere((e) => e.id == entryId);
+  /// Locate an entry in memory, loading from storage or Supabase if not yet present
+  Future<int> _findOrFetchEntryIndex(String entryId) async {
+    var idx = _entries.indexWhere((e) => e.id == entryId);
+    if (idx >= 0) return idx;
+
+    // 1. Try refreshing today's queue from storage
+    await getTodayQueue(forceRefresh: true);
+    idx = _entries.indexWhere((e) => e.id == entryId);
+    if (idx >= 0) return idx;
+
+    // 2. Try fetching directly from Supabase by ID
+    if (isSupabase) {
+      try {
+        final res = await SupabaseService.client
+            .from('queue_entries')
+            .select()
+            .eq('id', entryId)
+            .maybeSingle();
+        if (res != null) {
+          final entry = QueueEntry.fromJson(Map<String, dynamic>.from(res));
+          _entries.add(entry);
+          return _entries.length - 1;
+        }
+      } catch (e) {
+        debugPrint('Fetch entry error in _findOrFetchEntryIndex: $e');
+      }
+    }
+    return -1;
+  }
+
+  /// 1st Call: Call a specific patient entry to Nurse Station for Vital Signs triage
+  Future<QueueEntry> callForTriage(String entryId, {String? nurseName}) async {
+    final idx = await _findOrFetchEntryIndex(entryId);
     if (idx < 0) throw Exception('Entry not found');
     final updated = _entries[idx].copyWith(
+      status: 'triage',
+      // Preserve assigned doctor room intact! Do not overwrite with 'Nurse Station'
+      assistedBy: nurseName ?? _entries[idx].assistedBy,
+      calledAt: DateTime.now(),
+    );
+    return updateEntry(updated);
+  }
+
+  /// Complete triage and return patient to waiting for doctor consultation (2nd call)
+  Future<QueueEntry> completeTriage(String entryId, {VitalSigns? vitals, String? assistedBy}) async {
+    final idx = await _findOrFetchEntryIndex(entryId);
+    if (idx < 0) throw Exception('Entry not found');
+    final updated = _entries[idx].copyWith(
+      status: 'waiting',
+      vitalSigns: vitals ?? _entries[idx].vitalSigns,
+      assistedBy: assistedBy ?? _entries[idx].assistedBy,
+    );
+    return updateEntry(updated);
+  }
+
+  /// Call a specific patient entry into a consultation room (2nd Call)
+  Future<QueueEntry> callEntry(String entryId, {String? roomNumber, String? doctor}) async {
+    final idx = await _findOrFetchEntryIndex(entryId);
+    if (idx < 0) throw Exception('Entry not found');
+    final current = _entries[idx];
+    final assignedDoc = doctor ?? current.assignedDoctor;
+
+    // Resolve designated doctor room — never 'Nurse Station' for 2nd Call
+    var resolvedRoom = roomNumber;
+    if (resolvedRoom == null ||
+        resolvedRoom.trim().isEmpty ||
+        resolvedRoom.trim().toLowerCase() == 'nurse station') {
+      resolvedRoom = (current.assignedRoom != null &&
+              current.assignedRoom!.trim().isNotEmpty &&
+              current.assignedRoom!.trim().toLowerCase() != 'nurse station')
+          ? current.assignedRoom
+          : DoctorHelper.getDoctorRoom(assignedDoc, department: current.department);
+    }
+
+    final updated = current.copyWith(
       status: 'serving',
-      assignedRoom: roomNumber ?? _entries[idx].assignedRoom,
-      assignedDoctor: doctor ?? _entries[idx].assignedDoctor,
+      assignedRoom: resolvedRoom,
+      assignedDoctor: assignedDoc,
       calledAt: DateTime.now(),
     );
     return updateEntry(updated);
@@ -210,8 +340,36 @@ class QueueRepository {
 
   /// Mark a patient as completed
   Future<QueueEntry> markComplete(String entryId) async {
-    final idx = _entries.indexWhere((e) => e.id == entryId);
-    if (idx < 0) throw Exception('Entry not found');
+    final idx = await _findOrFetchEntryIndex(entryId);
+    if (idx < 0) {
+      // Direct Supabase update fallback if entry is not in local memory
+      if (isSupabase) {
+        final now = DateTime.now();
+        try {
+          await SupabaseService.client
+              .from('queue_entries')
+              .update({
+                'status': 'completed',
+                'completed_at': now.toIso8601String(),
+              })
+              .eq('id', entryId);
+          return QueueEntry(
+            id: entryId,
+            patientId: '',
+            patientName: '',
+            department: '',
+            queueNumber: '',
+            purpose: '',
+            status: 'completed',
+            dateKey: DateHelper.todayKey(),
+            completedAt: now,
+          );
+        } catch (e) {
+          debugPrint('Supabase direct markComplete error: $e');
+        }
+      }
+      throw Exception('Entry not found');
+    }
     final updated = _entries[idx].copyWith(
       status: 'completed',
       completedAt: DateTime.now(),
@@ -221,7 +379,7 @@ class QueueRepository {
 
   /// Skip a patient
   Future<QueueEntry> skipEntry(String entryId) async {
-    final idx = _entries.indexWhere((e) => e.id == entryId);
+    final idx = await _findOrFetchEntryIndex(entryId);
     if (idx < 0) throw Exception('Entry not found');
     final updated = _entries[idx].copyWith(status: 'skipped');
     return updateEntry(updated);
@@ -229,7 +387,7 @@ class QueueRepository {
 
   /// Put a patient on hold
   Future<QueueEntry> holdEntry(String entryId) async {
-    final idx = _entries.indexWhere((e) => e.id == entryId);
+    final idx = await _findOrFetchEntryIndex(entryId);
     if (idx < 0) throw Exception('Entry not found');
     final updated = _entries[idx].copyWith(status: 'on_hold');
     return updateEntry(updated);
@@ -237,7 +395,7 @@ class QueueRepository {
 
   /// Resume a patient from hold back to waiting
   Future<QueueEntry> resumeEntry(String entryId) async {
-    final idx = _entries.indexWhere((e) => e.id == entryId);
+    final idx = await _findOrFetchEntryIndex(entryId);
     if (idx < 0) throw Exception('Entry not found');
     final updated = _entries[idx].copyWith(status: 'waiting');
     return updateEntry(updated);
@@ -411,6 +569,7 @@ class QueueRepository {
   // ── Storage ──
 
   Future<void> _loadFromStorage() async {
+    await _ensureQueueVitalsLoaded();
     final today = DateHelper.todayKey();
     _lastLoadedDateKey = today;
 
@@ -424,11 +583,20 @@ class QueueRepository {
         final todayEntries = <QueueEntry>[];
         for (final j in data as List) {
           try {
-            todayEntries.add(QueueEntry.fromJson(Map<String, dynamic>.from(j as Map)));
+            var entry = QueueEntry.fromJson(Map<String, dynamic>.from(j as Map));
+            if (entry.vitalSigns == null && _queueVitalsCache.containsKey(entry.id)) {
+              entry = entry.copyWith(
+                vitalSigns: VitalSigns.fromJson(_queueVitalsCache[entry.id]!),
+              );
+            } else if (entry.vitalSigns != null) {
+              _queueVitalsCache[entry.id] = entry.vitalSigns!.toJson();
+            }
+            todayEntries.add(entry);
           } catch (rowErr) {
             debugPrint('Notice: error parsing queue entry row: $rowErr');
           }
         }
+        _persistQueueVitalsCache();
 
         // Keep past cached entries and replace today's entries
         _entries.removeWhere((e) => e.dateKey == today);
@@ -465,15 +633,26 @@ class QueueRepository {
     _loaded = true;
   }
 
-  /// Listen for realtime queue changes
+  StreamSubscription? _realtimeSubscription;
+
+  /// Listen for realtime queue changes.
+  /// Cancels any previously registered subscription before creating a new one
+  /// to prevent stale / duplicate stream listeners.
   void listenToChanges(VoidCallback onChanged) {
     if (!isSupabase) return;
-    SupabaseService.client
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = SupabaseService.client
         .from('queue_entries')
         .stream(primaryKey: ['id']).listen((_) async {
       _loaded = false;
       await _loadFromStorage();
       onChanged();
     });
+  }
+
+  /// Cancel the realtime subscription
+  void cancelListener() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
   }
 }

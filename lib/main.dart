@@ -12,8 +12,19 @@ import 'providers/theme_provider.dart';
 import 'providers/doctor_provider.dart';
 import 'providers/admin_provider.dart';
 
-void main() async {
+void main([List<String> args = const []]) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // If command line arguments request display/TV screen, route directly to /display
+  final isDisplayMode = args.contains('--display') ||
+      args.contains('--tv') ||
+      args.contains('-d') ||
+      args.any((a) => a.toLowerCase().contains('display'));
+
+  if (isDisplayMode) {
+    setInitialRoute('/display');
+    appRouter = createAppRouter(initialLocation: '/display');
+  }
 
   // Initialize Supabase if configured, otherwise fallback gracefully to local mode
   if (SupabaseService.isConfigured) {

@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/app_image_helper.dart';
 import '../../data/models/queue_entry.dart';
 import '../../data/models/visit_record.dart';
 import '../../data/repositories/patient_repository.dart';
-import '../../providers/clinic_provider.dart';
 import '../../providers/doctor_provider.dart';
 import '../../providers/queue_provider.dart';
+import '../../shared/widgets/doctor_switcher_dialog.dart';
 import '../../shared/widgets/olof_logo.dart';
 
 class DoctorDashboardScreen extends StatefulWidget {
@@ -89,9 +88,9 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Switch Doctor Profile',
+            tooltip: 'Switch Doctor Profile (Click or Scan QR)',
             icon: const Icon(Icons.switch_account_rounded),
-            onPressed: () => _showSwitchDoctorDialog(context, doctorProv),
+            onPressed: () => DoctorSwitcherDialog.show(context),
           ),
           IconButton(
             tooltip: 'Refresh Queue Data',
@@ -150,6 +149,18 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                       ],
                     ),
                   ),
+                  OutlinedButton.icon(
+                    onPressed: () => DoctorSwitcherDialog.show(context),
+                    icon: const Icon(Icons.switch_account_rounded, size: 16),
+                    label: const Text('Switch Doctor / QR', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: themeColor,
+                      side: BorderSide(color: themeColor.withValues(alpha: 0.5)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
@@ -861,86 +872,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
             }),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showSwitchDoctorDialog(BuildContext context, DoctorProvider doctorProv) {
-    final clinicProv = context.read<ClinicProvider>();
-    final docs = clinicProv.doctors;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.switch_account_rounded, color: Color(0xFF10B981)),
-            SizedBox(width: 8),
-            Text('Select Active Doctor Profile'),
-          ],
-        ),
-        content: SizedBox(
-          width: 400,
-          child: docs.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('No doctors configured in clinic database.'),
-                )
-              : ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: docs.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 8),
-                  itemBuilder: (_, i) {
-                    final d = docs[i];
-                    final isSelected = doctorProv.activeDoctor == d.name;
-                    const color = AppColors.doctorPrimary;
-
-                    return ListTile(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        side: BorderSide(
-                          color: isSelected ? color : Colors.grey.withValues(alpha: 0.2),
-                          width: isSelected ? 2 : 1,
-                        ),
-                      ),
-                      tileColor: isSelected ? color.withValues(alpha: 0.08) : null,
-                      leading: CircleAvatar(
-                        backgroundColor: color,
-                        backgroundImage: (d.photoUrl != null && d.photoUrl!.isNotEmpty)
-                            ? _getDoctorImageProvider(d.photoUrl!)
-                            : null,
-                        child: (d.photoUrl != null && d.photoUrl!.isNotEmpty)
-                            ? null
-                            : Text(
-                                d.name.isNotEmpty ? d.name.substring(0, 1) : 'D',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                              ),
-                      ),
-                      title: Text(DoctorProvider.formatDoctorName(d.name),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      subtitle: Text('${d.department} • ${d.room ?? (d.department == AppConstants.deptEyes ? 'OPHTHA ROOM 1' : 'ENT ROOM 1')}'),
-                      selected: isSelected,
-                      onTap: () {
-                        doctorProv.selectDoctorModel(d);
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Switched to ${DoctorProvider.formatDoctorName(d.name)}'),
-                            backgroundColor: color,
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
-          ),
-        ],
       ),
     );
   }

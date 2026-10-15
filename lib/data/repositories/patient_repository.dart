@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:storage_client/storage_client.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/patient.dart';
+import '../models/vital_signs.dart';
 import '../models/visit_record.dart';
 import '../services/supabase_service.dart';
 import '../services/local_storage_service.dart';
@@ -13,6 +14,71 @@ class PatientRepository {
   List<Patient> _patients = [];
   List<VisitRecord> _visits = [];
   bool _loaded = false;
+
+  static const _patientVitalsStorageKey = 'cached_patient_vitals_v1';
+  static final Map<String, Map<String, dynamic>> _vitalsCache = {};
+  static bool _vitalsCacheLoaded = false;
+
+  static const _patientVisitsStorageKey = 'cached_patient_visits_v1';
+  static final Map<String, List<Map<String, dynamic>>> _patientVisitsCache = {};
+  static bool _patientVisitsLoaded = false;
+
+  static Future<void> _ensureVisitsLoaded() async {
+    if (_patientVisitsLoaded) return;
+    _patientVisitsLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_patientVisitsStorageKey);
+      if (raw != null) {
+        final Map<String, dynamic> decoded = jsonDecode(raw);
+        decoded.forEach((key, val) {
+          if (val is List) {
+            _patientVisitsCache[key] =
+                val.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('PatientRepository visits cache load error: $e');
+    }
+  }
+
+  static Future<void> _persistVisitsCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_patientVisitsStorageKey, jsonEncode(_patientVisitsCache));
+    } catch (e) {
+      debugPrint('PatientRepository visits persist error: $e');
+    }
+  }
+
+  static Future<void> _ensureVitalsLoaded() async {
+    if (_vitalsCacheLoaded) return;
+    _vitalsCacheLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_patientVitalsStorageKey);
+      if (raw != null) {
+        final Map<String, dynamic> decoded = jsonDecode(raw);
+        decoded.forEach((key, val) {
+          if (val is Map) {
+            _vitalsCache[key] = Map<String, dynamic>.from(val);
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('PatientRepository vitals cache load error: $e');
+    }
+  }
+
+  static Future<void> _persistVitalsCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_patientVitalsStorageKey, jsonEncode(_vitalsCache));
+    } catch (e) {
+      debugPrint('PatientRepository vitals persist error: $e');
+    }
+  }
 
   bool get isSupabase => SupabaseService.isConfigured;
 
@@ -34,6 +100,7 @@ class PatientRepository {
 
   /// Fetch a single patient by ID directly from Supabase (bypasses stale cache)
   Future<Patient?> fetchPatient(String id) async {
+    await _ensureVitalsLoaded();
     if (isSupabase) {
       try {
         final data = await SupabaseService.client
@@ -42,7 +109,13 @@ class PatientRepository {
             .eq('id', id)
             .maybeSingle();
         if (data != null) {
-          final p = Patient.fromJson(Map<String, dynamic>.from(data as Map));
+          var p = Patient.fromJson(Map<String, dynamic>.from(data as Map));
+          if (p.vitalSigns == null && _vitalsCache.containsKey(id)) {
+            p = p.copyWith(vitalSigns: VitalSigns.fromJson(_vitalsCache[id]!));
+          } else if (p.vitalSigns != null) {
+            _vitalsCache[id] = p.vitalSigns!.toJson();
+            _persistVitalsCache();
+          }
           final idx = _patients.indexWhere((x) => x.id == id);
           if (idx >= 0) {
             _patients[idx] = p;
@@ -62,24 +135,89 @@ class PatientRepository {
   /// Get patient by patient number
   Future<Patient?> getPatientByNo(String patientNo) async {
     if (!_loaded) await _loadFromStorage();
+    final cleanNo = patientNo.trim().toUpperCase();
+    if (cleanNo.isEmpty) return null;
     try {
-      return _patients.firstWhere((p) => p.patientNo == patientNo);
-    } catch (_) {
-      return null;
+      return _patients.firstWhere(
+        (p) => p.patientNo.trim().toUpperCase() == cleanNo,
+      );
+    } catch (_) {}
+
+    // Fallback: search Supabase directly
+    if (isSupabase) {
+      try {
+        final data = await SupabaseService.client
+            .from('patients')
+            .select()
+            .ilike('patient_no', cleanNo)
+            .maybeSingle();
+        if (data != null) {
+          final p = Patient.fromJson(Map<String, dynamic>.from(data as Map));
+          final idx = _patients.indexWhere((x) => x.id == p.id);
+          if (idx >= 0) {
+            _patients[idx] = p;
+          } else {
+            _patients.add(p);
+          }
+          await _saveToStorage();
+          return p;
+        }
+      } catch (e) {
+        debugPrint('Supabase getPatientByNo error: $e');
+      }
     }
+    return null;
   }
 
-  /// Search patients by name or patient number
+  /// Search patients by name, patient number, or phone number
   Future<List<Patient>> searchPatients(String query) async {
     if (!_loaded) await _loadFromStorage();
     final q = query.toLowerCase().trim();
     if (q.isEmpty) return [];
-    return _patients.where((p) {
-      return p.fullName.toLowerCase().contains(q) ||
-          p.patientNo.toLowerCase().contains(q) ||
-          p.firstName.toLowerCase().contains(q) ||
-          p.lastName.toLowerCase().contains(q);
-    }).toList();
+
+    // Split words to support multi-token searches like "Juan Cruz" or partial ID
+    final tokens = q.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+
+    bool matchesPatient(Patient p) {
+      final name = p.fullName.toLowerCase();
+      final pNo = p.patientNo.toLowerCase();
+      final fName = p.firstName.toLowerCase();
+      final lName = p.lastName.toLowerCase();
+      final contact = p.contactNumber.toLowerCase();
+      final allText = '$name $pNo $fName $lName $contact';
+      return tokens.every((token) => allText.contains(token));
+    }
+
+    final localResults = _patients.where(matchesPatient).toList();
+
+    // Also query Supabase if available so newly registered patients on other devices are found
+    if (isSupabase) {
+      try {
+        final data = await SupabaseService.client
+            .from('patients')
+            .select()
+            .or('full_name.ilike.%$q%,patient_no.ilike.%$q%,first_name.ilike.%$q%,last_name.ilike.%$q%,contact_number.ilike.%$q%')
+            .limit(25);
+        final fetched = (data as List)
+            .map((item) => Patient.fromJson(Map<String, dynamic>.from(item as Map)))
+            .toList();
+        for (final p in fetched) {
+          if (!localResults.any((r) => r.id == p.id)) {
+            localResults.add(p);
+          }
+          final idx = _patients.indexWhere((x) => x.id == p.id);
+          if (idx >= 0) {
+            _patients[idx] = p;
+          } else {
+            _patients.add(p);
+          }
+        }
+      } catch (e) {
+        debugPrint('Supabase searchPatients error: $e');
+      }
+    }
+
+    return localResults;
   }
 
   /// Add a new patient
@@ -118,11 +256,21 @@ class PatientRepository {
 
   /// Update a patient
   Future<Patient> updatePatient(Patient patient) async {
+    await _ensureVitalsLoaded();
+    if (patient.vitalSigns != null) {
+      _vitalsCache[patient.id] = patient.vitalSigns!.toJson();
+      _persistVitalsCache();
+    }
+
     if (isSupabase) {
       try {
+        final payload = Map<String, dynamic>.from(patient.toSupabaseJson());
+        if (patient.vitalSigns != null) {
+          payload['vital_signs'] = patient.vitalSigns!.toJson();
+        }
         await SupabaseService.client
             .from('patients')
-            .update(patient.toSupabaseJson())
+            .update(payload)
             .eq('id', patient.id);
       } catch (e) {
         debugPrint('Supabase update error: $e');
@@ -169,15 +317,24 @@ class PatientRepository {
     await _saveToStorage();
   }
 
-  /// Get visit history for a patient (from in-memory cache)
+  /// Get visit history for a patient (from in-memory cache or local SharedPreferences)
   Future<List<VisitRecord>> getVisitHistory(String patientId) async {
+    await _ensureVisitsLoaded();
     if (!_loaded) await _loadFromStorage();
+    if (!_visits.any((v) => v.patientId == patientId) &&
+        _patientVisitsCache.containsKey(patientId)) {
+      final cached = _patientVisitsCache[patientId]!
+          .map((j) => VisitRecord.fromJson(j))
+          .toList();
+      _visits.addAll(cached);
+    }
     return _visits.where((v) => v.patientId == patientId).toList()
       ..sort((a, b) => b.visitDate.compareTo(a.visitDate));
   }
 
   /// Get all visit records across all patients
   Future<List<VisitRecord>> getAllVisitRecords() async {
+    await _ensureVisitsLoaded();
     if (!_loaded) await _loadFromStorage();
     return List.unmodifiable(_visits);
   }
@@ -185,6 +342,7 @@ class PatientRepository {
   /// Fetch visit history directly from Supabase (fresh, bypasses cache).
   /// Falls back to the local cache if Supabase is not available.
   Future<List<VisitRecord>> fetchVisitHistory(String patientId) async {
+    await _ensureVisitsLoaded();
     if (isSupabase) {
       try {
         final data = await SupabaseService.client
@@ -194,10 +352,29 @@ class PatientRepository {
             .order('visit_date', ascending: false);
         final fetched =
             (data as List).map((j) => VisitRecord.fromJson(j)).toList();
-        // Merge fresh records into the local cache so other callers benefit.
+
+        // Merge fresh records into local cache so un-synced visits are never wiped
+        final existingForPatient =
+            _visits.where((v) => v.patientId == patientId).toList();
+        final Map<String, VisitRecord> merged = {};
+        for (final v in fetched) {
+          merged[v.id] = v;
+        }
+        for (final v in existingForPatient) {
+          merged.putIfAbsent(v.id, () => v);
+        }
+        final result = merged.values.toList()
+          ..sort((a, b) => b.visitDate.compareTo(a.visitDate));
+
         _visits.removeWhere((v) => v.patientId == patientId);
-        _visits.addAll(fetched);
-        return fetched;
+        _visits.addAll(result);
+
+        // Update local SharedPreferences cache
+        _patientVisitsCache[patientId] =
+            result.map((v) => v.toJson()).toList();
+        _persistVisitsCache();
+
+        return result;
       } catch (e) {
         debugPrint('Supabase fetchVisitHistory error: $e');
       }
@@ -208,56 +385,73 @@ class PatientRepository {
 
   /// Add a visit record
   Future<void> addVisitRecord(VisitRecord visit) async {
+    await _ensureVisitsLoaded();
     if (isSupabase) {
       try {
         await SupabaseService.client
             .from('visit_records')
-            .insert(visit.toJson());
+            .insert(visit.toSupabaseJson());
       } catch (e) {
         debugPrint('Supabase insert visit error: $e');
+        try {
+          final fallback = Map<String, dynamic>.from(visit.toSupabaseJson());
+          final errStr = e.toString();
+          final match =
+              RegExp(r"Could not find the '([^']+)' column").firstMatch(errStr);
+          if (match != null) {
+            fallback.remove(match.group(1));
+          }
+          if (errStr.contains('assigned_doctor')) {
+            fallback.remove('assigned_doctor');
+          }
+          if (errStr.contains('assigned_room')) {
+            fallback.remove('assigned_room');
+          }
+          if (errStr.contains('chief_complaint')) {
+            fallback.remove('chief_complaint');
+          }
+          if (errStr.contains('diagnosis')) {
+            fallback.remove('diagnosis');
+          }
+          await SupabaseService.client
+              .from('visit_records')
+              .insert(fallback);
+        } catch (e2) {
+          debugPrint('Supabase fallback insert visit error: $e2');
+        }
       }
     }
-    _visits.add(visit);
+    final existingIdx = _visits.indexWhere((v) => v.id == visit.id);
+    if (existingIdx >= 0) {
+      _visits[existingIdx] = visit;
+    } else {
+      _visits.add(visit);
+    }
+
+    _patientVisitsCache.putIfAbsent(visit.patientId, () => []);
+    _patientVisitsCache[visit.patientId]!
+        .removeWhere((v) => v['id'] == visit.id);
+    _patientVisitsCache[visit.patientId]!.add(visit.toJson());
+    await _persistVisitsCache();
     await _saveToStorage();
   }
 
-  /// Upload a patient photo.
-  /// Under Option A, saves a local copy on Clinic PC disk to prevent storage quota overflow.
+  /// Save a patient photo.
+  /// Under Option A (Local Storage), saves directly to the Clinic PC hard drive
+  /// or returns a data URI, completely bypassing Supabase Cloud Storage.
   Future<String?> uploadPhoto(String patientId, Uint8List bytes, String fileName) async {
     final ext = fileName.split('.').last.toLowerCase();
     try {
-      await LocalStorageService.instance.savePhotoLocally(
+      final localPath = await LocalStorageService.instance.savePhotoLocally(
         patientId: patientId,
         bytes: bytes,
         ext: ext,
       );
+      debugPrint('Patient photo saved to local Clinic PC storage: $localPath');
+      return localPath;
     } catch (e) {
-      debugPrint('Local photo save note: $e');
-    }
-
-    final dataUri = 'data:image/$ext;base64,${base64Encode(bytes)}';
-
-    if (!isSupabase) return dataUri;
-
-    try {
-      final path = 'patients/$patientId/profile.$ext';
-      await SupabaseService.client.storage
-          .from('patient-photos')
-          .uploadBinary(
-            path,
-            bytes,
-            fileOptions: FileOptions(
-              upsert: true,
-              contentType: ext == 'png' ? 'image/png' : 'image/jpeg',
-            ),
-          );
-      final url = SupabaseService.client.storage
-          .from('patient-photos')
-          .getPublicUrl(path);
-      return url;
-    } catch (e) {
-      debugPrint('Photo upload error (using data URI fallback): $e');
-      return dataUri;
+      debugPrint('Local photo save error (fallback to data URI): $e');
+      return 'data:image/$ext;base64,${base64Encode(bytes)}';
     }
   }
 
@@ -270,6 +464,7 @@ class PatientRepository {
   // ── Local storage (web: localStorage, mobile: SharedPreferences fallback) ──
 
   Future<void> _loadFromStorage() async {
+    await _ensureVitalsLoaded();
     if (isSupabase) {
       try {
         final pData =
@@ -277,13 +472,23 @@ class PatientRepository {
         final parsedPatients = <Patient>[];
         for (final j in pData as List) {
           try {
-            parsedPatients.add(Patient.fromJson(Map<String, dynamic>.from(j as Map)));
+            var patient = Patient.fromJson(Map<String, dynamic>.from(j as Map));
+            if (patient.vitalSigns == null && _vitalsCache.containsKey(patient.id)) {
+              patient = patient.copyWith(
+                vitalSigns: VitalSigns.fromJson(_vitalsCache[patient.id]!),
+              );
+            } else if (patient.vitalSigns != null) {
+              _vitalsCache[patient.id] = patient.vitalSigns!.toJson();
+            }
+            parsedPatients.add(patient);
           } catch (err) {
             debugPrint('Notice: patient parse error for row: $err');
           }
         }
+        _persistVitalsCache();
         _patients = parsedPatients;
 
+        await _ensureVisitsLoaded();
         try {
           final vData = await SupabaseService.client
               .from('visit_records')
@@ -297,9 +502,31 @@ class PatientRepository {
               debugPrint('Notice: visit_record parse error: $vErr');
             }
           }
-          _visits = parsedVisits;
+          // Merge with any locally cached visits so offline visits aren't lost
+          final Map<String, VisitRecord> merged = {};
+          for (final v in parsedVisits) {
+            merged[v.id] = v;
+          }
+          for (final vList in _patientVisitsCache.values) {
+            for (final j in vList) {
+              try {
+                final v = VisitRecord.fromJson(j);
+                merged.putIfAbsent(v.id, () => v);
+              } catch (_) {}
+            }
+          }
+          _visits = merged.values.toList();
         } catch (vFetchErr) {
           debugPrint('Notice: visit_records fetch: $vFetchErr');
+          if (_visits.isEmpty) {
+            for (final vList in _patientVisitsCache.values) {
+              for (final j in vList) {
+                try {
+                  _visits.add(VisitRecord.fromJson(j));
+                } catch (_) {}
+              }
+            }
+          }
         }
 
         _loaded = true;
@@ -308,7 +535,17 @@ class PatientRepository {
         debugPrint('Supabase load error, falling back to local: $e');
       }
     }
-    // Fallback: load from local JSON in memory (web uses localStorage via kIsWeb)
+    // Fallback: load from local JSON / SharedPreferences
+    await _ensureVisitsLoaded();
+    if (_visits.isEmpty) {
+      for (final vList in _patientVisitsCache.values) {
+        for (final j in vList) {
+          try {
+            _visits.add(VisitRecord.fromJson(j));
+          } catch (_) {}
+        }
+      }
+    }
     _loaded = true;
   }
 

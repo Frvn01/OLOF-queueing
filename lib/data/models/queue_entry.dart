@@ -141,8 +141,10 @@ class QueueEntry {
   }
 
   bool get isWaiting => status == 'waiting';
+  bool get isTriage => status == 'triage';
   bool get isServing => status == 'serving';
   bool get isCompleted => status == 'completed';
   bool get isSkipped => status == 'skipped';
   bool get isOnHold => status == 'on_hold';
+  bool get hasVitals => vitalSigns != null && vitalSigns!.isNotEmpty;
 }

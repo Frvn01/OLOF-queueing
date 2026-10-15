@@ -68,6 +68,22 @@ class VisitRecord {
         'visit_date': visitDate.toIso8601String(),
       };
 
+  /// Clean JSON payload matching Supabase PostgreSQL `visit_records` schema.
+  /// Omits unmigrated schema cache columns (like assigned_doctor) to prevent PGRST204.
+  /// The doctor's name is safely preserved in [notes] and extracted by [_extractDoctor].
+  Map<String, dynamic> toSupabaseJson() => {
+        'id': id,
+        'patient_id': patientId,
+        'department': department,
+        'purpose': purpose,
+        if (chiefComplaint != null) 'chief_complaint': chiefComplaint,
+        if (diagnosis != null) 'diagnosis': diagnosis,
+        if (notes != null) 'notes': notes,
+        if (assignedRoom != null) 'assigned_room': assignedRoom,
+        'queue_number': queueNumber,
+        'visit_date': visitDate.toIso8601String(),
+      };
+
   factory VisitRecord.fromJson(Map<String, dynamic> json) => VisitRecord(
         id: json['id']?.toString() ?? '',
         patientId: json['patient_id']?.toString() ?? '',

@@ -90,5 +90,48 @@ class DoctorHelper {
         .toLowerCase();
     return cleanA == cleanB;
   }
+
+  /// Default doctor-to-consultation-room mappings
+  static const Map<String, String> defaultDoctorRooms = {
+    'lorenzo vera cruz': 'ENT ROOM 1',
+    'ma. cheryl arcinue': 'ENT ROOM 1',
+    'cheryl arcinue': 'ENT ROOM 1',
+    'cesar anthony grageda': 'ENT ROOM 2',
+    'ian j. daguman': 'OPHTHA ROOM 1',
+    'ian daguman': 'OPHTHA ROOM 1',
+    'amelia reyes vera cruz': 'OPHTHA ROOM 2',
+    'amelia vera cruz': 'OPHTHA ROOM 2',
+    'anthony robert patrick lim': 'OPHTHA ROOM 3',
+    'anthony lim': 'OPHTHA ROOM 3',
+    'roel villanueva': 'OPHTHA ROOM 3',
+    'clemens lee sabitsana': 'OPHTHA ROOM 4',
+    'clemens sabitsana': 'OPHTHA ROOM 4',
+    'francis marie lingad': 'OPHTHA ROOM 4',
+    'margarita justine bondoc': 'OPHTHA ROOM 4',
+    'aramis b. torrefranca': 'OPHTHA ROOM 4',
+    'aramis torrefranca': 'OPHTHA ROOM 4',
+  };
+
+  /// Get the designated consultation room for a doctor
+  static String? getDoctorRoom(String? doctorName, {String? department}) {
+    if (doctorName == null || doctorName.trim().isEmpty) {
+      if (department != null && department.toUpperCase() == 'EYES') return 'OPHTHA ROOM 1';
+      if (department != null && department.toUpperCase() == 'ENT') return 'ENT ROOM 1';
+      return null;
+    }
+    final clean = doctorName
+        .replaceAll(RegExp(r'\b(dr|doctor)\.?\s*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .toLowerCase();
+    for (final entry in defaultDoctorRooms.entries) {
+      if (clean.contains(entry.key) || entry.key.contains(clean)) {
+        return entry.value;
+      }
+    }
+    if (department != null && department.toUpperCase() == 'EYES') return 'OPHTHA ROOM 1';
+    if (department != null && department.toUpperCase() == 'ENT') return 'ENT ROOM 1';
+    return null;
+  }
 }
 

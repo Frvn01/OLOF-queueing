@@ -5,11 +5,13 @@ import '../../core/theme/app_colors.dart';
 import '../../providers/queue_provider.dart';
 import '../../data/models/queue_entry.dart';
 import '../../shared/widgets/olof_logo.dart';
-import '../../shared/widgets/tutorial_dialog.dart';
 import '../../providers/theme_provider.dart';
 import '../../core/utils/helpers.dart';
+import '../../core/utils/audio_helper.dart';
 
-/// Secretary Dashboard — Queue management
+/// Clinic Coordinator Station — Central Master Caller & Queue Management.
+/// The Clinic Coordinator triggers both 1st Call (Nurse Station Vitals) and
+/// 2nd Call (Doctor Consultation Rooms), with live oversight of queue flow.
 class SecretaryScreen extends StatefulWidget {
   const SecretaryScreen({super.key});
 
@@ -104,7 +106,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Ophtha Department',
+                  'Clinic Coordinator',
                   style: TextStyle(
                     fontSize: isCompact ? 16 : 18,
                     fontWeight: FontWeight.w800,
@@ -113,9 +115,9 @@ class _SecretaryScreenState extends State<SecretaryScreen>
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  'Ophthalmology Dept. Queue Management',
+                  'Master Calling Station — 1st Call (Vitals) & 2nd Call (Doctor Rooms)',
                   style: TextStyle(
-                    fontSize: isCompact ? 11 : 12.5,
+                    fontSize: isCompact ? 11 : 12,
                     fontWeight: FontWeight.w600,
                     color: subtitleColor,
                   ),
@@ -124,15 +126,33 @@ class _SecretaryScreenState extends State<SecretaryScreen>
               ],
             ),
           ),
-
-          // Archive Button
-          IconButton(
-            icon: const Icon(Icons.archive_outlined, size: 20),
-            tooltip: 'Queue Archive & History',
-            onPressed: () => context.push('/archive'),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          // Master Caller badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFEC4899), Color(0xFF0284C7)],
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.campaign_rounded, size: 14, color: Colors.white),
+                SizedBox(width: 5),
+                Text(
+                  'MASTER CALLER',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 4),
           // Theme Switcher
           IconButton(
             icon: Icon(
@@ -142,14 +162,6 @@ class _SecretaryScreenState extends State<SecretaryScreen>
             ),
             tooltip: 'Toggle Theme',
             onPressed: () => context.read<ThemeProvider>().toggleTheme(),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          ),
-          // Tutorial Button
-          IconButton(
-            icon: const Icon(Icons.help_outline_rounded, color: AppColors.cyanCalm, size: 20),
-            tooltip: 'Ophtha Dept Guide',
-            onPressed: () => _showSecretaryTutorial(context),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
           ),
@@ -163,43 +175,6 @@ class _SecretaryScreenState extends State<SecretaryScreen>
           ),
         ],
       ),
-    );
-  }
-
-  void _showSecretaryTutorial(BuildContext context) {
-    TutorialDialog.show(
-      context,
-      title: 'Ophtha Department Guide',
-      steps: [
-        TutorialItem(
-          title: '1. Assigned Rooms & Doctors',
-          description:
-              'Each patient is pre-assigned to their doctor and room at registration. Calling a patient automatically directs them to the correct room.',
-          icon: Icons.meeting_room_rounded,
-          color: AppColors.primary,
-        ),
-        TutorialItem(
-          title: '2. Switch Departments',
-          description:
-              'Toggle between the ENT and EYES tabs to manage their respective waiting queues and view real-time statistics.',
-          icon: Icons.tab_rounded,
-          color: AppColors.cyanCalm,
-        ),
-        TutorialItem(
-          title: '3. Call Next Patient',
-          description:
-              'Click "Call Next Patient" to notify the patient. The TV display in the lobby instantly highlights the number and plays a chime alert!',
-          icon: Icons.campaign_rounded,
-          color: AppColors.warning,
-        ),
-        TutorialItem(
-          title: '4. Hold, Skip, or Complete',
-          description:
-              'If a patient is temporarily away, tap Hold to pause their turn, or Skip to move to the next. Tap "Mark Complete" once consultation is finished.',
-          icon: Icons.check_circle_rounded,
-          color: AppColors.success,
-        ),
-      ],
     );
   }
 
@@ -317,10 +292,12 @@ class _SecretaryScreenState extends State<SecretaryScreen>
     bool isCompact,
   ) {
     final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
 
     return Consumer<QueueProvider>(
       builder: (context, provider, _) {
         final allDeptWaiting = provider.getWaiting(department);
+        final triageList = provider.getTriage(department);
         final distinctDocs = <String>{};
         for (final e in provider.getQueue(department)) {
           if (e.assignedDoctor != null && e.assignedDoctor!.trim().isNotEmpty) {
@@ -346,18 +323,65 @@ class _SecretaryScreenState extends State<SecretaryScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Stats Row
-              _buildStatsRow(context, stats, color, isDark, isCompact),
-              const SizedBox(height: 14),
+              // ── Stats Row ───────────────────────────────────────────
+              _buildStatsRow(context, stats, provider, department, color, isDark, isCompact),
+              const SizedBox(height: 18),
 
-              // Doctor Filter Chips (when doctors are queued)
+              // ── Now Serving ─────────────────────────────────────────
+              _buildNowServing(context, department, docServing, color, isDark, isCompact),
+              const SizedBox(height: 18),
+
+              // ── 1st Call (Triage) Active Banner ───────────────────────
+              if (triageList.isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEC4899).withValues(alpha: isDark ? 0.14 : 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFEC4899), width: 1.5),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.monitor_heart_rounded, color: Color(0xFFEC4899), size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '1ST CALL ACTIVE — ${triageList.length} patient${triageList.length > 1 ? 's' : ''} at Nurse Station',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFFEC4899),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              triageList.map((e) => e.queueNumber).join(', '),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+              ],
+
+              // ── Doctor Filter Chips ─────────────────────────────────
               if (distinctDocs.isNotEmpty) ...[
                 Text(
                   'Doctor Queue Filter:',
                   style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w700,
-                    color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary,
+                    color: subtitleColor,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -399,41 +423,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
                 const SizedBox(height: 14),
               ],
 
-              // Now Serving
-              _buildNowServing(context, department, docServing, color, isDark, isCompact),
-              const SizedBox(height: 18),
-
-              // Call Next Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: docWaiting.isNotEmpty
-                      ? () => _callNext(department, doctorName: selectedDoc)
-                      : null,
-                  icon: const Icon(Icons.campaign_rounded, size: 22),
-                  label: Text(
-                    docWaiting.isNotEmpty
-                        ? (selectedDoc != null
-                            ? 'Call Next for $selectedDoc (${docWaiting.first.queueNumber})'
-                            : 'Call Next Patient (${docWaiting.first.queueNumber})')
-                        : 'No Patients Waiting in Queue',
-                    style: TextStyle(
-                      fontSize: isCompact ? 14.5 : 16.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: color,
-                    minimumSize: const Size(double.infinity, 54),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 22),
-
-              // Waiting List
+              // ── Waiting Queue ───────────────────────────────────────
               Text(
                 selectedDoc != null
                     ? 'Waiting for $selectedDoc (${docWaiting.length})'
@@ -453,7 +443,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
 
               const SizedBox(height: 22),
 
-              // Completed List
+              // ── Completed List ──────────────────────────────────────
               if (completed.isNotEmpty) ...[
                 Text(
                   'Completed Consultations (${completed.length})',
@@ -477,23 +467,26 @@ class _SecretaryScreenState extends State<SecretaryScreen>
   Widget _buildStatsRow(
     BuildContext context,
     Map<String, int> stats,
+    QueueProvider provider,
+    String department,
     Color color,
     bool isDark,
     bool isCompact,
   ) {
+    final triageCount = provider.getTriage(department).length;
+    final vitalsReadyCount = provider.getWaiting(department).where((e) => e.hasVitals).length;
+
     return Row(
       children: [
-        _buildStatTile(
-            'Waiting', stats['waiting'] ?? 0, AppColors.warning, isDark, isCompact),
+        _buildStatTile('Waiting', stats['waiting'] ?? 0, AppColors.warning, isDark, isCompact),
         SizedBox(width: isCompact ? 6 : 10),
-        _buildStatTile(
-            'Serving', stats['serving'] ?? 0, AppColors.nowServing, isDark, isCompact),
+        _buildStatTile('Serving', stats['serving'] ?? 0, AppColors.nowServing, isDark, isCompact),
         SizedBox(width: isCompact ? 6 : 10),
-        _buildStatTile(
-            'Done', stats['completed'] ?? 0, AppColors.success, isDark, isCompact),
+        _buildStatTile('At Triage', triageCount, const Color(0xFFEC4899), isDark, isCompact),
         SizedBox(width: isCompact ? 6 : 10),
-        _buildStatTile(
-            'On Hold', stats['onHold'] ?? 0, AppColors.onHold, isDark, isCompact),
+        _buildStatTile('Vitals ✓', vitalsReadyCount, AppColors.success, isDark, isCompact),
+        SizedBox(width: isCompact ? 6 : 10),
+        _buildStatTile('Done', stats['completed'] ?? 0, AppColors.cyanCalm, isDark, isCompact),
       ],
     );
   }
@@ -517,7 +510,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
         decoration: BoxDecoration(
           color: cardBg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: borderColor, width: 1.5),
+          border: Border.all(color: count > 0 ? color.withValues(alpha: 0.4) : borderColor, width: 1.5),
         ),
         child: Column(
           children: [
@@ -526,7 +519,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
               style: TextStyle(
                 fontSize: isCompact ? 20 : 24,
                 fontWeight: FontWeight.w900,
-                color: color,
+                color: count > 0 ? color : (isDark ? AppColors.textDisabled : AppColors.lightTextDisabled),
               ),
             ),
             const SizedBox(height: 2),
@@ -556,7 +549,6 @@ class _SecretaryScreenState extends State<SecretaryScreen>
   ) {
     final cardBg = isDark ? AppColors.surfaceMid : AppColors.lightSurface;
     final borderColor = isDark ? AppColors.surfaceLight : AppColors.lightBorder;
-    final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
     final subtitleColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
 
     return Container(
@@ -566,9 +558,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
         color: cardBg,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: entry != null
-              ? AppColors.nowServing
-              : borderColor,
+          color: entry != null ? AppColors.nowServing : borderColor,
           width: entry != null ? 2.5 : 1.5,
         ),
         boxShadow: [
@@ -581,71 +571,132 @@ class _SecretaryScreenState extends State<SecretaryScreen>
         ],
       ),
       child: entry != null
-          ? Column(
+          ? Row(
               children: [
+                // Queue number badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   decoration: BoxDecoration(
-                    color: AppColors.nowServing,
-                    borderRadius: BorderRadius.circular(20),
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.nowServing,
+                        AppColors.nowServing.withValues(alpha: 0.8),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Text(
-                    'NOW SERVING',
-                    style: TextStyle(
-                      fontSize: 11.5,
+                  child: Text(
+                    entry.queueNumber,
+                    style: const TextStyle(
+                      fontSize: 26,
                       fontWeight: FontWeight.w900,
                       color: AppColors.surfaceDarkest,
-                      letterSpacing: 1.5,
+                      letterSpacing: 1.0,
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  entry.queueNumber,
-                  style: TextStyle(
-                    fontSize: isCompact ? 42 : 48,
-                    fontWeight: FontWeight.w900,
-                    color: isDark ? AppColors.nowServing : const Color(0xFFB45309),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.nowServing.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              '2ND CALL — IN CONSULTATION',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.nowServing,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ),
+                          if (entry.hasVitals) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.success.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'Vitals ✓',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.success,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        entry.purpose,
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? AppColors.textPrimary : AppColors.lightTextPrimary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (entry.assignedDoctor != null && entry.assignedDoctor!.isNotEmpty) ...[
+                        Builder(
+                          builder: (context) {
+                            final room = (entry.assignedRoom != null &&
+                                    entry.assignedRoom!.trim().isNotEmpty &&
+                                    entry.assignedRoom!.trim().toLowerCase() != 'nurse station')
+                                ? entry.assignedRoom!
+                                : (DoctorHelper.getDoctorRoom(entry.assignedDoctor, department: entry.department) ??
+                                    'Consultation Room');
+                            return Text(
+                              '${entry.assignedDoctor!} • $room',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: subtitleColor,
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                Text(
-                  entry.patientName.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: isCompact ? 18 : 20,
-                    fontWeight: FontWeight.w800,
-                    color: titleColor,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${entry.assignedDoctor != null && entry.assignedDoctor!.isNotEmpty ? "${entry.assignedDoctor} • " : ""}${entry.assignedRoom ?? "Room Unassigned"} • ${entry.purpose}',
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                    color: subtitleColor,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 14),
-                ElevatedButton.icon(
-                  onPressed: () => _markComplete(entry.id),
-                  icon: const Icon(Icons.check_circle_rounded),
-                  label: const Text('Mark Complete'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.success,
-                    minimumSize: const Size(180, 46),
-                  ),
+                // Action buttons for currently serving
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () => _markComplete(entry.id),
+                      icon: const Icon(Icons.check_circle_rounded, size: 16),
+                      label: const Text('Complete'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.success,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             )
           : Column(
               children: [
-                Icon(Icons.person_off_rounded,
-                    size: 34, color: subtitleColor),
+                Icon(Icons.person_off_rounded, size: 34, color: subtitleColor),
                 const SizedBox(height: 8),
                 Text(
-                  'No patient currently called',
+                  'No patient currently in consultation',
                   style: TextStyle(
                     color: subtitleColor,
                     fontWeight: FontWeight.w600,
@@ -664,18 +715,18 @@ class _SecretaryScreenState extends State<SecretaryScreen>
     final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
     final subtitleColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
 
+    Color statusColor = borderColor;
+    if (entry.isTriage) statusColor = const Color(0xFFEC4899);
+    if (entry.isOnHold) statusColor = AppColors.onHold;
+    if (entry.hasVitals) statusColor = const Color(0xFF10B981);
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: entry.isOnHold
-              ? AppColors.onHold
-              : borderColor,
-          width: 1.5,
-        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: statusColor, width: 1.5),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.03),
@@ -683,150 +734,243 @@ class _SecretaryScreenState extends State<SecretaryScreen>
           ),
         ],
       ),
-      child: Row(
+      child: Column(
         children: [
-          // Queue Number Box
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: color.withValues(alpha: 0.3)),
-            ),
-            child: Center(
-              child: Text(
-                entry.queueNumber.split('-').last,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: color,
+          Row(
+            children: [
+              // Queue Number Box
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: color.withValues(alpha: 0.3)),
+                ),
+                child: Center(
+                  child: Text(
+                    entry.queueNumber.split('-').last,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: color,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Patient Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.patientName,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    color: titleColor,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  entry.purpose,
-                  style: TextStyle(
-                    color: subtitleColor,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                if ((entry.assignedDoctor != null && entry.assignedDoctor!.isNotEmpty) ||
-                    (entry.assignedRoom != null && entry.assignedRoom!.isNotEmpty))
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Row(
+              const SizedBox(width: 12),
+              // Patient Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        if (entry.assignedDoctor != null && entry.assignedDoctor!.isNotEmpty) ...[
-                          const Icon(Icons.medical_services_rounded, size: 12, color: AppColors.primary),
-                          const SizedBox(width: 3),
-                          Flexible(
-                            child: Text(
-                              entry.assignedDoctor!,
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primary,
-                              ),
-                              overflow: TextOverflow.ellipsis,
+                        Flexible(
+                          child: Text(
+                            entry.purpose,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              color: titleColor,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(width: 8),
-                        ],
-                        if (entry.assignedRoom != null && entry.assignedRoom!.isNotEmpty) ...[
-                          const Icon(Icons.meeting_room_rounded, size: 12, color: AppColors.cyanCalm),
-                          const SizedBox(width: 3),
-                          Text(
-                            entry.assignedRoom!,
-                            style: const TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.cyanCalm,
-                            ),
-                          ),
-                        ],
+                        ),
+                        const SizedBox(width: 8),
+                        if (entry.isTriage)
+                          _buildStatusChip('1st Call Active', const Color(0xFFEC4899))
+                        else if (entry.hasVitals)
+                          _buildStatusChip('Vitals ✓ Ready', AppColors.success)
+                        else
+                          _buildStatusChip('Pending Vitals', AppColors.warning),
                       ],
                     ),
-                  ),
-                if (entry.isOnHold)
-                  Container(
-                    margin: const EdgeInsets.only(top: 4),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.onHold.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      'ON HOLD',
+                    const SizedBox(height: 2),
+                    Text(
+                      entry.queueNumber,
                       style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.onHold,
+                        color: subtitleColor,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ),
-              ],
-            ),
-          ),
-          // Actions
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (entry.isOnHold)
-                IconButton(
-                  onPressed: () => _resumeEntry(entry.id),
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  tooltip: 'Resume',
-                  color: AppColors.success,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                )
-              else
-                IconButton(
-                  onPressed: () => _holdEntry(entry.id),
-                  icon: const Icon(Icons.pause_rounded),
-                  tooltip: 'Hold',
-                  color: AppColors.onHold,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    if ((entry.assignedDoctor != null && entry.assignedDoctor!.isNotEmpty) ||
+                        (entry.assignedRoom != null && entry.assignedRoom!.isNotEmpty))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          children: [
+                            if (entry.assignedDoctor != null && entry.assignedDoctor!.isNotEmpty) ...[
+                              const Icon(Icons.medical_services_rounded, size: 12, color: AppColors.primary),
+                              const SizedBox(width: 3),
+                              Flexible(
+                                child: Text(
+                                  entry.assignedDoctor!,
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                            if (entry.assignedRoom != null && entry.assignedRoom!.isNotEmpty) ...[
+                              const Icon(Icons.meeting_room_rounded, size: 12, color: AppColors.cyanCalm),
+                              const SizedBox(width: 3),
+                              Text(
+                                entry.assignedRoom!,
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.cyanCalm,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    if (entry.isOnHold)
+                      Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.onHold.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'ON HOLD',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.onHold,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-              IconButton(
-                onPressed: () => _skipEntry(entry.id),
-                icon: const Icon(Icons.skip_next_rounded),
-                tooltip: 'Skip',
-                color: AppColors.warning,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               ),
-              IconButton(
-                onPressed: () => _confirmDeleteEntry(entry),
-                icon: const Icon(Icons.delete_outline_rounded),
-                tooltip: 'Remove from Queue',
-                color: AppColors.error,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              // Admin Actions
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (entry.isOnHold)
+                    IconButton(
+                      onPressed: () => _resumeEntry(entry.id),
+                      icon: const Icon(Icons.play_arrow_rounded),
+                      tooltip: 'Resume',
+                      color: AppColors.success,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                    )
+                  else
+                    IconButton(
+                      onPressed: () => _holdEntry(entry.id),
+                      icon: const Icon(Icons.pause_rounded),
+                      tooltip: 'Hold',
+                      color: AppColors.onHold,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                    ),
+                  IconButton(
+                    onPressed: () => _skipEntry(entry.id),
+                    icon: const Icon(Icons.skip_next_rounded),
+                    tooltip: 'Skip',
+                    color: AppColors.warning,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                  ),
+                  IconButton(
+                    onPressed: () => _confirmDeleteEntry(entry),
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    tooltip: 'Remove',
+                    color: AppColors.error,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Divider(height: 1, color: borderColor.withValues(alpha: 0.6)),
+          const SizedBox(height: 8),
+          // ── Coordinator Direct Calling Buttons ──
+          Row(
+            children: [
+              // 1st Call (Vitals) button
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _callForVitals(entry),
+                  icon: Icon(
+                    entry.isTriage ? Icons.campaign_rounded : Icons.monitor_heart_rounded,
+                    size: 16,
+                  ),
+                  label: Text(
+                    entry.isTriage
+                        ? 'Recall (1st Call)'
+                        : (entry.hasVitals ? 'Re-call Vitals' : '1st Call (Vitals)'),
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: entry.isTriage
+                        ? const Color(0xFFD97706)
+                        : (entry.hasVitals ? (isDark ? AppColors.surfaceLight : AppColors.lightSurfaceMid) : const Color(0xFFEC4899)),
+                    foregroundColor: entry.hasVitals && !entry.isTriage ? titleColor : Colors.white,
+                    elevation: 0,
+                    minimumSize: const Size(0, 38),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // 2nd Call (Doctor) button
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _callForDoctor(entry),
+                  icon: const Icon(Icons.meeting_room_rounded, size: 16),
+                  label: Text(
+                    entry.assignedDoctor != null && entry.assignedDoctor!.isNotEmpty
+                        ? '2nd Call (${entry.assignedDoctor!.split(' ').last})'
+                        : '2nd Call (Doctor)',
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: entry.hasVitals ? const Color(0xFF10B981) : AppColors.brandBlue,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    minimumSize: const Size(0, 38),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.5), width: 0.8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9.5,
+          fontWeight: FontWeight.w900,
+          color: color,
+          letterSpacing: 0.3,
+        ),
       ),
     );
   }
@@ -846,8 +990,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
       ),
       child: Row(
         children: [
-          const Icon(Icons.check_circle_rounded,
-              size: 18, color: AppColors.success),
+          const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.success),
           const SizedBox(width: 10),
           Text(
             entry.queueNumber,
@@ -860,7 +1003,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              entry.patientName,
+              entry.purpose,
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 color: subtitleColor,
@@ -912,17 +1055,86 @@ class _SecretaryScreenState extends State<SecretaryScreen>
     );
   }
 
-  Future<void> _callNext(String department, {String? doctorName}) async {
-    if (doctorName != null) {
-      await context
-          .read<QueueProvider>()
-          .callDoctorNext(department, doctorName);
-    } else {
-      await context
-          .read<QueueProvider>()
-          .callNext(department);
+  // ── Calling Action Methods ──
+
+  Future<void> _callForVitals(QueueEntry entry) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await context.read<QueueProvider>().callForTriage(entry.id);
+      await AudioHelper.playChime();
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.monitor_heart_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '1ST CALL: ${entry.queueNumber} called to Nurse Station for Vital Signs!',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFFEC4899),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to call for vitals: $e'), backgroundColor: AppColors.error),
+      );
     }
   }
+
+  Future<void> _callForDoctor(QueueEntry entry) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final docName = entry.assignedDoctor;
+      final room = (entry.assignedRoom != null &&
+              entry.assignedRoom!.trim().isNotEmpty &&
+              entry.assignedRoom!.trim().toLowerCase() != 'nurse station')
+          ? entry.assignedRoom
+          : DoctorHelper.getDoctorRoom(docName, department: entry.department);
+
+      await context.read<QueueProvider>().callEntry(
+        entry.id,
+        roomNumber: room,
+        doctor: docName,
+      );
+      await AudioHelper.playChime();
+      if (!mounted) return;
+      final dest = (room != null && room.isNotEmpty)
+          ? (docName != null && docName.isNotEmpty ? '$docName ($room)' : room)
+          : (docName != null && docName.isNotEmpty ? docName : 'Consultation Room');
+      messenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.meeting_room_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '2ND CALL: ${entry.queueNumber} called to $dest!',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF10B981),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to call for doctor: $e'), backgroundColor: AppColors.error),
+      );
+    }
+  }
+
 
   Future<void> _markComplete(String entryId) async {
     await context.read<QueueProvider>().markComplete(entryId);
@@ -966,10 +1178,9 @@ class _SecretaryScreenState extends State<SecretaryScreen>
           ],
         ),
         content: Text(
-          'Are you sure you want to remove ${entry.patientName} (${entry.queueNumber}) from the active queue?',
+          'Are you sure you want to remove ${entry.queueNumber} from the active queue?',
           style: TextStyle(
-            color:
-                isDark ? AppColors.textSecondary : AppColors.lightTextSecondary,
+            color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary,
             fontSize: 14,
           ),
         ),
@@ -995,8 +1206,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                '${entry.patientName} (${entry.queueNumber}) removed from queue'),
+            content: Text('${entry.queueNumber} removed from queue'),
             backgroundColor: AppColors.urgent,
           ),
         );

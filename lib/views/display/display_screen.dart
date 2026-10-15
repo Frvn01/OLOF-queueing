@@ -31,8 +31,10 @@ class _DisplayScreenState extends State<DisplayScreen>
     with SingleTickerProviderStateMixin {
   late Timer _clockTimer;
   DateTime _currentTime = DateTime.now();
-  String? _lastCalledEntId;
-  String? _lastCalledEyesId;
+  String? _lastCalledEntKey;
+  String? _lastCalledEyesKey;
+  String? _lastCalledEntTriageKey;
+  String? _lastCalledEyesTriageKey;
   bool _audioEnabled = true;
   bool _isPlayingChimeFeedback = false;
   // Tracks whether the user has tapped the screen (required by Chrome to unlock audio)
@@ -89,16 +91,36 @@ class _DisplayScreenState extends State<DisplayScreen>
     return null;
   }
 
-  void _checkAndPlayChime(QueueEntry? entServing, QueueEntry? eyesServing) {
+  void _checkAndPlayChime({
+    QueueEntry? entServing,
+    QueueEntry? eyesServing,
+    QueueEntry? entTriage,
+    QueueEntry? eyesTriage,
+  }) {
     bool hasNewCall = false;
 
-    if (entServing != null && entServing.id != _lastCalledEntId) {
-      _lastCalledEntId = entServing.id;
+    final entKey = entServing != null ? '${entServing.id}_${entServing.calledAt?.millisecondsSinceEpoch}' : null;
+    final eyesKey = eyesServing != null ? '${eyesServing.id}_${eyesServing.calledAt?.millisecondsSinceEpoch}' : null;
+    final entTKey = entTriage != null ? '${entTriage.id}_${entTriage.calledAt?.millisecondsSinceEpoch}' : null;
+    final eyesTKey = eyesTriage != null ? '${eyesTriage.id}_${eyesTriage.calledAt?.millisecondsSinceEpoch}' : null;
+
+    if (entKey != null && entKey != _lastCalledEntKey) {
+      _lastCalledEntKey = entKey;
       hasNewCall = true;
     }
 
-    if (eyesServing != null && eyesServing.id != _lastCalledEyesId) {
-      _lastCalledEyesId = eyesServing.id;
+    if (eyesKey != null && eyesKey != _lastCalledEyesKey) {
+      _lastCalledEyesKey = eyesKey;
+      hasNewCall = true;
+    }
+
+    if (entTKey != null && entTKey != _lastCalledEntTriageKey) {
+      _lastCalledEntTriageKey = entTKey;
+      hasNewCall = true;
+    }
+
+    if (eyesTKey != null && eyesTKey != _lastCalledEyesTriageKey) {
+      _lastCalledEyesTriageKey = eyesTKey;
       hasNewCall = true;
     }
 
@@ -142,6 +164,8 @@ class _DisplayScreenState extends State<DisplayScreen>
           builder: (context, queueProv, clinicProv, _) {
             final entServing = queueProv.getNowServing(AppConstants.deptEnt);
             final eyesServing = queueProv.getNowServing(AppConstants.deptEyes);
+            final entTriage = queueProv.getNowTriage(AppConstants.deptEnt);
+            final eyesTriage = queueProv.getNowTriage(AppConstants.deptEyes);
             final entWaiting = queueProv.getWaiting(AppConstants.deptEnt);
             final eyesWaiting = queueProv.getWaiting(AppConstants.deptEyes);
 
@@ -159,9 +183,14 @@ class _DisplayScreenState extends State<DisplayScreen>
                         d.department == 'BOTH'))
                 .toList();
 
-            // Trigger chime if serving changed
+            // Trigger chime if serving or triage call changed
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              _checkAndPlayChime(entServing, eyesServing);
+              _checkAndPlayChime(
+                entServing: entServing,
+                eyesServing: eyesServing,
+                entTriage: entTriage,
+                eyesTriage: eyesTriage,
+              );
             });
 
             return Column(
@@ -657,7 +686,7 @@ class _DisplayScreenState extends State<DisplayScreen>
           // ── Per-doctor panels (ONLY for doctors who actually have active patients queued) ──
           Builder(
             builder: (context) {
-              // Find doctors who ACTUALLY HAVE PATIENTS QUEUED today (serving or waiting)
+              // Find doctors who ACTUALLY HAVE PATIENTS QUEUED today (serving, waiting, or at triage)
               final activeQueuedDocs = (queueProv != null)
                   ? doctors.where((doc) {
                       final docName = doc.name as String;
@@ -665,38 +694,59 @@ class _DisplayScreenState extends State<DisplayScreen>
                           queueProv.getDoctorNowServing(department, docName);
                       final docWaiting =
                           queueProv.getDoctorWaiting(department, docName);
-                      return docServing != null || docWaiting.isNotEmpty;
+                      final docTriage = queueProv
+                          .getDoctorQueue(department, docName)
+                          .where((e) => e.isTriage)
+                          .toList();
+                      return docServing != null || docWaiting.isNotEmpty || docTriage.isNotEmpty;
                     }).toList()
                   : <dynamic>[];
 
               if (activeQueuedDocs.length > 1 && queueProv != null) {
-                // MULTIPLE active doctors — scrollable list that NEVER overflows!
+                // MULTIPLE active doctors — with top 1st Call triage banner if active!
                 return Expanded(
-                  child: ListView.separated(
-                    padding: EdgeInsets.zero,
-                    itemCount: activeQueuedDocs.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final doc = activeQueuedDocs[index];
-                      final docName = doc.name as String;
-                      final docServing =
-                          queueProv.getDoctorNowServing(department, docName);
-                      final docWaiting =
-                          queueProv.getDoctorWaiting(department, docName);
-                      final docTotal =
-                          queueProv.getDoctorQueue(department, docName).length;
-                      return _buildDoctorQueueCard(
-                        doctorName: docName,
-                        room: doc.room as String?,
-                        serving: docServing,
-                        waitingCount: docWaiting.length,
-                        totalCount: docTotal,
-                        waitingEntries: docWaiting,
-                        accentColor: accentColor,
-                        isDark: isDark,
-                        isHighContrast: isHighContrast,
-                      );
-                    },
+                  child: Column(
+                    children: [
+                      if (queueProv.getNowTriage(department) != null)
+                        _buildTriageBanner(
+                          triage: queueProv.getNowTriage(department)!,
+                          isDark: isDark,
+                          isHighContrast: isHighContrast,
+                        ),
+                      Expanded(
+                        child: ListView.separated(
+                          padding: EdgeInsets.zero,
+                          itemCount: activeQueuedDocs.length,
+                          separatorBuilder: (context, index) => const SizedBox(height: 10),
+                          itemBuilder: (context, index) {
+                            final doc = activeQueuedDocs[index];
+                            final docName = doc.name as String;
+                            final docServing =
+                                queueProv.getDoctorNowServing(department, docName);
+                            final docWaiting =
+                                queueProv.getDoctorWaiting(department, docName);
+                            final docTriage = queueProv
+                                .getDoctorQueue(department, docName)
+                                .where((e) => e.isTriage)
+                                .toList();
+                            final docTotal =
+                                queueProv.getDoctorQueue(department, docName).length;
+                            return _buildDoctorQueueCard(
+                              doctorName: docName,
+                              room: doc.room as String?,
+                              serving: docServing,
+                              triageEntry: docTriage.isNotEmpty ? docTriage.first : null,
+                              waitingCount: docWaiting.length,
+                              totalCount: docTotal,
+                              waitingEntries: docWaiting,
+                              accentColor: accentColor,
+                              isDark: isDark,
+                              isHighContrast: isHighContrast,
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 );
               } else if (activeQueuedDocs.length == 1 && queueProv != null) {
@@ -718,8 +768,17 @@ class _DisplayScreenState extends State<DisplayScreen>
                           accentColor: accentColor,
                           isDark: isDark,
                           isHighContrast: isHighContrast,
+                          queueProv: queueProv,
                         ),
                       ),
+                      if (queueProv.getNowTriage(department) != null) ...[
+                        const SizedBox(height: 10),
+                        _buildTriageBanner(
+                          triage: queueProv.getNowTriage(department)!,
+                          isDark: isDark,
+                          isHighContrast: isHighContrast,
+                        ),
+                      ],
                       const SizedBox(height: 14),
                       Expanded(
                         flex: 2,
@@ -746,8 +805,17 @@ class _DisplayScreenState extends State<DisplayScreen>
                           accentColor: accentColor,
                           isDark: isDark,
                           isHighContrast: isHighContrast,
+                          queueProv: queueProv,
                         ),
                       ),
+                      if (queueProv?.getNowTriage(department) != null) ...[
+                        const SizedBox(height: 10),
+                        _buildTriageBanner(
+                          triage: queueProv!.getNowTriage(department)!,
+                          isDark: isDark,
+                          isHighContrast: isHighContrast,
+                        ),
+                      ],
                       const SizedBox(height: 14),
                       Expanded(
                         flex: 2,
@@ -769,11 +837,69 @@ class _DisplayScreenState extends State<DisplayScreen>
     );
   }
 
+  /// Dedicated 1st Call (Vital Signs) banner for TV display — strictly complies with Data Privacy Act
+  Widget _buildTriageBanner({
+    required QueueEntry triage,
+    required bool isDark,
+    required bool isHighContrast,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEC4899).withValues(alpha: isDark ? 0.22 : 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFEC4899), width: 1.8),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFEC4899).withValues(alpha: 0.2),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.monitor_heart_rounded, color: Color(0xFFEC4899), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '1ST CALL (VITALS): ${triage.queueNumber} — PLEASE PROCEED TO NURSE STATION',
+              style: const TextStyle(
+                color: Color(0xFFEC4899),
+                fontWeight: FontWeight.w900,
+                fontSize: 13.5,
+                letterSpacing: 0.3,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEC4899),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Text(
+              'NURSE STATION',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 11,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Per-doctor summary card shown on the TV display
   Widget _buildDoctorQueueCard({
     required String doctorName,
     String? room,
     required QueueEntry? serving,
+    QueueEntry? triageEntry,
     required int waitingCount,
     required int totalCount,
     List<QueueEntry> waitingEntries = const [],
@@ -898,6 +1024,26 @@ class _DisplayScreenState extends State<DisplayScreen>
                       ),
                     ),
                     const SizedBox(height: 4),
+                  ] else if (triageEntry != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEC4899).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFEC4899), width: 1.2),
+                      ),
+                      child: Text(
+                        'VITALS: #${triageEntry.queueNumber.split('-').last}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFFEC4899),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
                   ] else ...[
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -992,13 +1138,18 @@ class _DisplayScreenState extends State<DisplayScreen>
     required Color accentColor,
     required bool isDark,
     required bool isHighContrast,
+    QueueProvider? queueProv,
   }) {
     final cardBg = isDark ? AppColors.surfaceMid : AppColors.lightSurface;
     final borderColor = isDark ? AppColors.surfaceLight : AppColors.lightBorder;
     final textPrimary = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
     final textDisabled = isDark ? AppColors.textDisabled : AppColors.lightTextDisabled;
 
-    if (serving == null) {
+    final triage = queueProv?.getNowTriage(department);
+    final activeEntry = serving ?? triage;
+    final isTriageCall = serving == null && triage != null;
+
+    if (activeEntry == null) {
       return Container(
         decoration: BoxDecoration(
           color: cardBg,
@@ -1058,6 +1209,7 @@ class _DisplayScreenState extends State<DisplayScreen>
     }
 
     final isNewCall = _isPlayingChimeFeedback;
+    final callThemeColor = isTriageCall ? const Color(0xFFEC4899) : AppColors.nowServing;
 
     return ScaleTransition(
       scale: _pulseAnimation,
@@ -1067,12 +1219,12 @@ class _DisplayScreenState extends State<DisplayScreen>
           color: isDark ? AppColors.surfaceMid : AppColors.lightSurface,
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
-            color: AppColors.nowServing,
+            color: callThemeColor,
             width: isHighContrast ? 4.5 : 3.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.nowServing.withValues(alpha: isNewCall ? 0.5 : 0.28),
+              color: callThemeColor.withValues(alpha: isNewCall ? 0.5 : 0.28),
               blurRadius: isNewCall ? 36 : 24,
               spreadRadius: isNewCall ? 5 : 2,
             ),
@@ -1092,24 +1244,28 @@ class _DisplayScreenState extends State<DisplayScreen>
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
                     decoration: BoxDecoration(
-                      color: AppColors.nowServing,
+                      color: callThemeColor,
                       borderRadius: BorderRadius.circular(30),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.nowServing.withValues(alpha: 0.4),
+                          color: callThemeColor.withValues(alpha: 0.4),
                           blurRadius: 10,
                         ),
                       ],
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.volume_up_rounded, size: 15, color: AppColors.surfaceDarkest),
-                        SizedBox(width: 6),
+                        Icon(
+                          isTriageCall ? Icons.monitor_heart_rounded : Icons.volume_up_rounded,
+                          size: 15,
+                          color: isTriageCall ? Colors.white : AppColors.surfaceDarkest,
+                        ),
+                        const SizedBox(width: 6),
                         Text(
-                          'NOW SERVING',
+                          isTriageCall ? '1ST CALL — VITAL SIGNS' : '2ND CALL — NOW SERVING',
                           style: TextStyle(
-                            color: AppColors.surfaceDarkest,
+                            color: isTriageCall ? Colors.white : AppColors.surfaceDarkest,
                             fontSize: 13,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 2.0,
@@ -1124,11 +1280,13 @@ class _DisplayScreenState extends State<DisplayScreen>
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      serving.queueNumber,
+                      activeEntry.queueNumber,
                       style: TextStyle(
                         fontSize: isHighContrast ? 104 : 88,
                         fontWeight: FontWeight.w900,
-                        color: isDark ? AppColors.nowServing : const Color(0xFFB45309),
+                        color: isTriageCall
+                            ? const Color(0xFFEC4899)
+                            : (isDark ? AppColors.nowServing : const Color(0xFFB45309)),
                         letterSpacing: 2.0,
                         height: 1.0,
                       ),
@@ -1136,11 +1294,24 @@ class _DisplayScreenState extends State<DisplayScreen>
                   ),
                   const SizedBox(height: 6),
 
-                  // Doctor Name or NEW PATIENT badge
+                  // Doctor Name or Patient Name / Badge
                   Builder(
                     builder: (ctx) {
-                      final doctorName = _getServingDoctor(serving, department);
-                      final hasRoom = serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty;
+                      if (isTriageCall) {
+                        return Text(
+                          'PROCEED TO NURSE STATION',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: isHighContrast ? 22 : 19,
+                            fontWeight: FontWeight.w900,
+                            color: isDark ? const Color(0xFFF472B6) : const Color(0xFFBE185D),
+                            letterSpacing: 0.8,
+                          ),
+                        );
+                      }
+                      final doctorName = _getServingDoctor(activeEntry, department);
+                      final hasRoom = activeEntry.assignedRoom != null && activeEntry.assignedRoom!.trim().isNotEmpty;
                       if (doctorName != null) {
                         return Text(
                           doctorName,
@@ -1177,7 +1348,7 @@ class _DisplayScreenState extends State<DisplayScreen>
                   const SizedBox(height: 3),
                   // Purpose label
                   Text(
-                    serving.purpose.toUpperCase(),
+                    activeEntry.purpose.toUpperCase(),
                     style: TextStyle(
                       fontSize: isHighContrast ? 13 : 11.5,
                       fontWeight: FontWeight.w700,
@@ -1187,52 +1358,65 @@ class _DisplayScreenState extends State<DisplayScreen>
                   ),
                   const SizedBox(height: 8),
 
-                  // Assigned Room Banner
+                  // Destination Banner
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     decoration: BoxDecoration(
-                      color: (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty)
-                          ? (isDark ? AppColors.primaryDark : AppColors.primary)
-                          : (isDark ? AppColors.surfaceLight : AppColors.lightSurfaceMid),
+                      color: isTriageCall
+                          ? const Color(0xFFEC4899)
+                          : ((activeEntry.assignedRoom != null && activeEntry.assignedRoom!.trim().isNotEmpty)
+                              ? (isDark ? AppColors.primaryDark : AppColors.primary)
+                              : (isDark ? AppColors.surfaceLight : AppColors.lightSurfaceMid)),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty)
-                            ? AppColors.primaryLight
-                            : (isDark ? AppColors.surfaceHover : AppColors.lightBorder),
+                        color: isTriageCall
+                            ? const Color(0xFFF472B6)
+                            : ((activeEntry.assignedRoom != null && activeEntry.assignedRoom!.trim().isNotEmpty)
+                                ? AppColors.primaryLight
+                                : (isDark ? AppColors.surfaceHover : AppColors.lightBorder)),
                         width: 1.5,
                       ),
                       boxShadow: [
-                        if (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty)
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.3),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
+                        BoxShadow(
+                          color: (isTriageCall ? const Color(0xFFEC4899) : AppColors.primary).withValues(alpha: 0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
                       ],
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty)
-                              ? Icons.meeting_room_rounded
-                              : Icons.info_outline_rounded,
-                          color: (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty)
-                              ? Colors.white
-                              : (isDark ? AppColors.textSecondary : AppColors.lightTextSecondary),
+                          isTriageCall
+                              ? Icons.local_hospital_rounded
+                              : ((activeEntry.assignedRoom != null && activeEntry.assignedRoom!.trim().isNotEmpty)
+                                  ? Icons.meeting_room_rounded
+                                  : Icons.info_outline_rounded),
+                          color: Colors.white,
                           size: 20,
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty)
-                              ? 'PROCEED TO ${serving.assignedRoom!.toUpperCase()}'
-                              : 'PLEASE WAIT FOR ROOM ASSIGNMENT',
+                          isTriageCall
+                              ? 'PROCEED TO NURSE STATION FOR VITAL SIGNS'
+                              : () {
+                                  final room = (activeEntry.assignedRoom != null &&
+                                          activeEntry.assignedRoom!.trim().isNotEmpty &&
+                                          activeEntry.assignedRoom!.trim().toLowerCase() != 'nurse station')
+                                      ? activeEntry.assignedRoom!
+                                      : DoctorHelper.getDoctorRoom(
+                                          activeEntry.assignedDoctor,
+                                          department: activeEntry.department,
+                                        );
+                                  return (room != null && room.trim().isNotEmpty)
+                                      ? 'PROCEED TO ${room.trim().toUpperCase()}'
+                                      : 'PLEASE WAIT FOR ROOM ASSIGNMENT';
+                                }(),
                           style: TextStyle(
                             fontSize: isHighContrast ? 17 : 15.5,
                             fontWeight: FontWeight.w900,
-                            color: (serving.assignedRoom != null && serving.assignedRoom!.trim().isNotEmpty)
-                                ? Colors.white
-                                : (isDark ? AppColors.textSecondary : AppColors.lightTextSecondary),
+                            color: Colors.white,
                             letterSpacing: 0.8,
                           ),
                         ),

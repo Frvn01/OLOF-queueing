@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/app_image_helper.dart';
+import '../../core/utils/helpers.dart';
 import '../../data/models/patient.dart';
 import '../../providers/doctor_provider.dart';
 import '../../providers/queue_provider.dart';
@@ -16,7 +17,7 @@ class DoctorPatientsScreen extends StatefulWidget {
 
 class _DoctorPatientsScreenState extends State<DoctorPatientsScreen> {
   String _searchQuery = '';
-  String _filterChip = 'all'; // 'all', 'assigned', 'first_time', 'today_queue'
+  String _filterChip = 'my_patients'; // default to doctor's own patients
   bool _isGridView = true;
   final TextEditingController _searchCtrl = TextEditingController();
 
@@ -46,9 +47,13 @@ class _DoctorPatientsScreenState extends State<DoctorPatientsScreen> {
     // Apply filter & search
     final filtered = allPatients.where((p) {
       // 1. Filter Chip
-      if (_filterChip == 'assigned') {
+      if (_filterChip == 'my_patients') {
+        // Show only patients assigned to this doctor
         if (p.assignedDoctor != null && p.assignedDoctor!.isNotEmpty) {
-          if (p.assignedDoctor != doctorProv.activeDoctor) return false;
+          if (!DoctorHelper.isSameDoctor(p.assignedDoctor, doctorProv.activeDoctor)) return false;
+        } else {
+          // Unassigned patients — exclude from "my patients" view
+          return false;
         }
       } else if (_filterChip == 'first_time') {
         if (!p.isFirstTime) return false;
@@ -56,6 +61,7 @@ class _DoctorPatientsScreenState extends State<DoctorPatientsScreen> {
         final inQueue = todayQueue.any((q) => q.patientId == p.id);
         if (!inQueue) return false;
       }
+      // 'all' shows everything
 
       // 2. Search query
       if (_searchQuery.isNotEmpty) {
@@ -154,23 +160,24 @@ class _DoctorPatientsScreenState extends State<DoctorPatientsScreen> {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
+                      _buildFilterChip(
+                        'my_patients',
+                        'My Patients (${doctorProv.getAssignedPatients().length})',
+                        themeColor,
+                        icon: Icons.person_pin_rounded,
+                      ),
+                      const SizedBox(width: 8),
                       _buildFilterChip('all', 'All Patients (${allPatients.length})', themeColor),
                       const SizedBox(width: 8),
                       _buildFilterChip(
-                        'assigned',
-                        'Assigned to Me (${doctorProv.getAssignedPatients().length})',
-                        themeColor,
-                      ),
-                      const SizedBox(width: 8),
-                      _buildFilterChip(
                         'first_time',
-                        'First-Time Patients (${allPatients.where((p) => p.isFirstTime).length})',
+                        'First-Time (${allPatients.where((p) => p.isFirstTime).length})',
                         themeColor,
                       ),
                       const SizedBox(width: 8),
                       _buildFilterChip(
                         'today_queue',
-                        'In Today\'s Queue (${todayQueue.length})',
+                        'In Queue Today (${todayQueue.length})',
                         themeColor,
                       ),
                     ],
@@ -256,11 +263,14 @@ class _DoctorPatientsScreenState extends State<DoctorPatientsScreen> {
     );
   }
 
-  Widget _buildFilterChip(String key, String label, Color themeColor) {
+  Widget _buildFilterChip(String key, String label, Color themeColor, {IconData? icon}) {
     final isSelected = _filterChip == key;
     return FilterChip(
       selected: isSelected,
       showCheckmark: false,
+      avatar: icon != null
+          ? Icon(icon, size: 14, color: isSelected ? Colors.white : themeColor)
+          : null,
       label: Text(label),
       labelStyle: TextStyle(
         fontSize: 12,
@@ -402,47 +412,79 @@ class _DoctorPatientsScreenState extends State<DoctorPatientsScreen> {
 
             const Spacer(),
 
-            // Bottom Actions Row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.room_rounded, size: 14, color: Colors.grey.shade500),
-                    const SizedBox(width: 4),
+            // Assigned doctor badge + room
+            if (patient.assignedDoctor != null && patient.assignedDoctor!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.medical_services_rounded, size: 13, color: themeColor.withValues(alpha: 0.8)),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      DoctorProvider.formatDoctorName(patient.assignedDoctor!),
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: themeColor,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (patient.assignedRoom != null && patient.assignedRoom!.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Icon(Icons.room_rounded, size: 12, color: Colors.grey.shade500),
+                    const SizedBox(width: 3),
                     Text(
-                      patient.assignedRoom ?? 'Consultation Room',
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w500),
+                      patient.assignedRoom!,
+                      style: TextStyle(fontSize: 10.5, color: Colors.grey.shade500),
                     ),
                   ],
+                ],
+              ),
+              const SizedBox(height: 8),
+            ] else ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.room_rounded, size: 13, color: Colors.grey.shade500),
+                  const SizedBox(width: 4),
+                  Text(
+                    patient.assignedRoom ?? 'No room assigned',
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 11, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            // Action Buttons Row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton(
+                  onPressed: () {
+                    context.push('/doctor/patients/${patient.id}');
+                  },
+                  style: OutlinedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('View Record', style: TextStyle(fontSize: 12)),
                 ),
-                Row(
-                  children: [
-                    OutlinedButton(
-                      onPressed: () {
-                        context.push('/doctor/patients/${patient.id}');
-                      },
-                      style: OutlinedButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: const Text('View Record', style: TextStyle(fontSize: 12)),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: () {
-                        context.push('/doctor/consultation/${patient.id}');
-                      },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: themeColor,
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: const Text('Consult', style: TextStyle(fontSize: 12)),
-                    ),
-                  ],
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () {
+                    context.push('/doctor/consultation/${patient.id}');
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: themeColor,
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Consult', style: TextStyle(fontSize: 12)),
                 ),
               ],
             ),

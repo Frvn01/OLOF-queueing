@@ -72,9 +72,12 @@ class _AdminShellState extends State<AdminShell> {
                     // ── Emerald Clinic Navigation Sidebar ─────────────
                     _buildSidebar(context, isDark, waitingCount),
 
-                    // ── Active Page View ──────────────────────────────
+                    // ── Active Page View (IndexedStack preserves state & prevents unmount assertions) ──
                     Expanded(
-                      child: _pages[_currentIndex],
+                      child: IndexedStack(
+                        index: _currentIndex,
+                        children: _pages,
+                      ),
                     ),
                   ],
                 ),

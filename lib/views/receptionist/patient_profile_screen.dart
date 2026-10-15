@@ -39,7 +39,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   bool _uploadingPhoto = false;
   final ImagePicker _picker = ImagePicker();
   String _selectedDeptTab = 'ENT'; // 'ENT' | 'EYES'
-  String _visitFilter = 'ALL'; // 'ALL' | 'REGISTERED' | 'CONSULTATIONS' | 'OTHERS'
+  String _visitFilter = 'ALL'; // 'ALL' | 'REGISTERED' | 'OTHERS'
 
   @override
   void initState() {
@@ -253,7 +253,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
         children: [
           Expanded(
               flex: 2,
-              child: _buildPatientDetails(context, patient, isDark, isCompact)),
+              child: _buildPatientDetails(context, patient, provider, isDark, isCompact)),
           const SizedBox(width: 20),
           Expanded(child: _buildQRAndHistory(context, patient, provider, isDark)),
         ],
@@ -262,14 +262,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
 
     return Column(
       children: [
-        _buildPatientDetails(context, patient, isDark, isCompact),
+        _buildPatientDetails(context, patient, provider, isDark, isCompact),
         const SizedBox(height: 18),
         _buildQRAndHistory(context, patient, provider, isDark),
       ],
     );
   }
 
-  Widget _buildPatientDetails(BuildContext context, Patient patient, bool isDark, bool isCompact) {
+  Widget _buildPatientDetails(BuildContext context, Patient patient, PatientProvider provider, bool isDark, bool isCompact) {
     final cardBg = isDark ? AppColors.surfaceMid : AppColors.lightSurface;
     final borderColor = isDark ? AppColors.surfaceLight : AppColors.lightBorder;
     final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
@@ -422,7 +422,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
           _buildPatientPmhSection(context, patient, isDark, isCompact),
 
           // ── Department Consultations & Clinical Records ────────────────────
-          _buildConsultationsSection(context, patient, isDark, isCompact),
+          _buildConsultationsSection(context, patient, provider, isDark, isCompact),
         ],
       ),
     );
@@ -431,19 +431,30 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   Widget _buildConsultationsSection(
     BuildContext context,
     Patient patient,
+    PatientProvider provider,
     bool isDark,
     bool isCompact,
   ) {
     final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
     final subtitleColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
 
-    // Records for the active tab
+    // Dept record for the active tab (if any)
     final tabRecords = _deptRecords
         .where((r) => r.department.toUpperCase() == _selectedDeptTab)
         .toList();
     final isEyesTab = _selectedDeptTab == 'EYES';
     final tabColor = isEyesTab ? AppColors.cyanCalm : AppColors.brandBlue;
     final tabIcon = isEyesTab ? Icons.visibility_rounded : Icons.hearing_rounded;
+
+    // Consultations for the active tab (from patient visit history)
+    final deptConsultations = provider.selectedPatientVisits
+        .where((v) =>
+            v.isConsultation &&
+            (v.department.toUpperCase() == _selectedDeptTab ||
+                v.department.toUpperCase() == 'BOTH'))
+        .toList();
+
+    final hasAnyRecordForTab = tabRecords.isNotEmpty || deptConsultations.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -459,10 +470,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.folder_shared_rounded, size: 18, color: AppColors.brandBlue),
+                const Icon(Icons.medical_information_rounded, size: 18, color: AppColors.brandBlue),
                 const SizedBox(width: 8),
                 Text(
-                  'Department Records',
+                  'Department Records & Consultations',
                   style: TextStyle(
                     fontSize: 15.5,
                     fontWeight: FontWeight.w800,
@@ -475,7 +486,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
               onPressed: () => _showAddConsultationDialog(patient, preselectedDept: _selectedDeptTab),
               icon: const Icon(Icons.add_rounded, size: 15),
               label: Text(
-                'Add $_selectedDeptTab Record',
+                'Add $_selectedDeptTab Consultation',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
               ),
               style: ElevatedButton.styleFrom(
@@ -496,7 +507,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
               icon: Icons.hearing_rounded,
               color: AppColors.brandBlue,
               isSelected: _selectedDeptTab == 'ENT',
-              hasRecords: _deptRecords.any((r) => r.department.toUpperCase() == 'ENT'),
+              hasRecords: _deptRecords.any((r) => r.department.toUpperCase() == 'ENT') ||
+                  provider.selectedPatientVisits.any((v) =>
+                      v.isConsultation &&
+                      (v.department.toUpperCase() == 'ENT' || v.department.toUpperCase() == 'BOTH')),
               isDark: isDark,
             ),
             const SizedBox(width: 8),
@@ -505,7 +519,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
               icon: Icons.visibility_rounded,
               color: AppColors.cyanCalm,
               isSelected: _selectedDeptTab == 'EYES',
-              hasRecords: _deptRecords.any((r) => r.department.toUpperCase() == 'EYES'),
+              hasRecords: _deptRecords.any((r) => r.department.toUpperCase() == 'EYES') ||
+                  provider.selectedPatientVisits.any((v) =>
+                      v.isConsultation &&
+                      (v.department.toUpperCase() == 'EYES' || v.department.toUpperCase() == 'BOTH')),
               isDark: isDark,
             ),
           ],
@@ -513,9 +530,58 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
         const SizedBox(height: 12),
 
         // ── Tab content ───────────────────────────────────────────────────
-        if (tabRecords.isNotEmpty)
-          ...tabRecords.map((dr) => _buildDeptRecordCard(dr, patient, isDark, isCompact))
-        else
+        if (hasAnyRecordForTab) ...[
+          // Department baseline profile card (without New Ticket button)
+          if (tabRecords.isNotEmpty)
+            ...tabRecords.map((dr) => _buildDeptRecordCard(dr, patient, isDark, isCompact)),
+
+          // Clinical consultations list
+          if (deptConsultations.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.history_edu_rounded, size: 16, color: tabColor),
+                  const SizedBox(width: 6),
+                  Text(
+                    '$_selectedDeptTab Clinical Consultations (${deptConsultations.length})',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800,
+                      color: titleColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ...deptConsultations.map((visit) => _buildVisitCard(context, visit, isDark)),
+          ] else
+            Container(
+              margin: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: tabColor.withValues(alpha: isDark ? 0.05 : 0.03),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: tabColor.withValues(alpha: 0.15)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 18, color: tabColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'No completed $_selectedDeptTab consultations recorded yet.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: subtitleColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ] else
           // No record state for active tab
           Container(
             padding: const EdgeInsets.all(18),
@@ -648,7 +714,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   borderRadius: BorderRadius.circular(5),
                 ),
                 child: Text(
-                  '${dr.department.toUpperCase()} CLINIC',
+                  '${dr.department.toUpperCase()} CLINIC PROFILE',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -656,41 +722,23 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   ),
                 ),
               ),
-              Row(
-                children: [
-                  if (dr.assignedDoctor != null && dr.assignedDoctor!.isNotEmpty)
+              if (dr.assignedDoctor != null && dr.assignedDoctor!.isNotEmpty)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.person_pin_rounded, size: 13, color: AppColors.primary),
+                    const SizedBox(width: 4),
                     Text(
-                      dr.assignedDoctor!,
-                      style: TextStyle(fontSize: 11, color: subtitleColor, fontWeight: FontWeight.w600),
+                      'Doctor: ${dr.assignedDoctor!}',
+                      style: TextStyle(fontSize: 11.5, color: subtitleColor, fontWeight: FontWeight.w700),
                     ),
-                  const SizedBox(width: 6),
-                  InkWell(
-                    borderRadius: BorderRadius.circular(4),
-                    onTap: () => _showAddConsultationDialog(patient, preselectedDept: dr.department),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: deptColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.confirmation_number_rounded, size: 11, color: deptColor),
-                          const SizedBox(width: 3),
-                          Text(
-                            'New Ticket',
-                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: deptColor),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
             ],
           ),
           const SizedBox(height: 8),
+          if (dr.assignedRoom != null && dr.assignedRoom!.isNotEmpty)
+            _buildInfoRow('Assigned Room', dr.assignedRoom!, isDark, isCompact),
           if (dr.chiefComplaint != null && dr.chiefComplaint!.isNotEmpty)
             _buildInfoRow('Chief Complaint', dr.chiefComplaint!, isDark, isCompact),
           if (dr.historyOfPresentIllness != null && dr.historyOfPresentIllness!.isNotEmpty)
@@ -711,10 +759,82 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     String selectedDept = preselectedDept ??
         ((hasEyes && !hasEnt) ? 'ENT' : ((hasEnt && !hasEyes) ? 'EYES' : 'ENT'));
     String selectedPurpose = 'Consultation';
-    Doctor? selectedDoctor;
-    final matchingRooms = clinic.getRooms(department: selectedDept == 'BOTH' ? null : selectedDept);
-    ClinicRoom? selectedRoom = matchingRooms.isNotEmpty ? matchingRooms.first : null;
-    final complaintCtrl = TextEditingController();
+
+    Doctor? resolveDoctor(String dept) {
+      // 1. Check dept records for that department
+      try {
+        final match = _deptRecords.firstWhere(
+          (r) => r.department.toUpperCase() == dept.toUpperCase(),
+        );
+        if (match.assignedDoctor != null && match.assignedDoctor!.trim().isNotEmpty) {
+          final doc = clinic.doctors.firstWhere(
+            (d) => d.name.toLowerCase() == match.assignedDoctor!.trim().toLowerCase(),
+          );
+          return doc;
+        }
+      } catch (_) {}
+
+      // 2. Fallback to patient assignedDoctor
+      if (patient.assignedDoctor != null && patient.assignedDoctor!.trim().isNotEmpty) {
+        try {
+          final doc = clinic.doctors.firstWhere(
+            (d) => d.name.toLowerCase() == patient.assignedDoctor!.trim().toLowerCase(),
+          );
+          if (dept == 'BOTH' || doc.department == dept || doc.department == 'BOTH') {
+            return doc;
+          }
+        } catch (_) {}
+      }
+      return null;
+    }
+
+    ClinicRoom? resolveRoom(String dept, Doctor? doc) {
+      if (doc != null && doc.room != null && doc.room!.trim().isNotEmpty) {
+        try {
+          return clinic.rooms.firstWhere(
+            (r) => r.name.toLowerCase() == doc.room!.trim().toLowerCase(),
+          );
+        } catch (_) {}
+      }
+      try {
+        final match = _deptRecords.firstWhere(
+          (r) => r.department.toUpperCase() == dept.toUpperCase(),
+        );
+        if (match.assignedRoom != null && match.assignedRoom!.trim().isNotEmpty) {
+          return clinic.rooms.firstWhere(
+            (r) => r.name.toLowerCase() == match.assignedRoom!.trim().toLowerCase(),
+          );
+        }
+      } catch (_) {}
+      if (patient.assignedRoom != null && patient.assignedRoom!.trim().isNotEmpty) {
+        try {
+          return clinic.rooms.firstWhere(
+            (r) => r.name.toLowerCase() == patient.assignedRoom!.trim().toLowerCase(),
+          );
+        } catch (_) {}
+      }
+      final rooms = clinic.getRooms(department: dept == 'BOTH' ? null : dept);
+      return rooms.isNotEmpty ? rooms.first : null;
+    }
+
+    String resolveChiefComplaint(String dept) {
+      try {
+        final match = _deptRecords.firstWhere(
+          (r) => r.department.toUpperCase() == dept.toUpperCase(),
+        );
+        if (match.chiefComplaint != null && match.chiefComplaint!.trim().isNotEmpty) {
+          return match.chiefComplaint!.trim();
+        }
+      } catch (_) {}
+      if (patient.chiefComplaint != null && patient.chiefComplaint!.trim().isNotEmpty) {
+        return patient.chiefComplaint!.trim();
+      }
+      return '';
+    }
+
+    Doctor? selectedDoctor = resolveDoctor(selectedDept);
+    ClinicRoom? selectedRoom = resolveRoom(selectedDept, selectedDoctor);
+    final complaintCtrl = TextEditingController(text: resolveChiefComplaint(selectedDept));
     bool isSubmitting = false;
 
     await showModalBottomSheet(
@@ -873,9 +993,11 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                             onTap: () {
                               setSheetState(() {
                                 selectedDept = 'ENT';
-                                selectedDoctor = null;
-                                final rooms = clinic.getRooms(department: 'ENT');
-                                selectedRoom = rooms.isNotEmpty ? rooms.first : null;
+                                selectedDoctor = resolveDoctor('ENT');
+                                selectedRoom = resolveRoom('ENT', selectedDoctor);
+                                if (complaintCtrl.text.isEmpty) {
+                                  complaintCtrl.text = resolveChiefComplaint('ENT');
+                                }
                               });
                             },
                             isDark: isDark,
@@ -892,9 +1014,11 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                             onTap: () {
                               setSheetState(() {
                                 selectedDept = 'EYES';
-                                selectedDoctor = null;
-                                final rooms = clinic.getRooms(department: 'EYES');
-                                selectedRoom = rooms.isNotEmpty ? rooms.first : null;
+                                selectedDoctor = resolveDoctor('EYES');
+                                selectedRoom = resolveRoom('EYES', selectedDoctor);
+                                if (complaintCtrl.text.isEmpty) {
+                                  complaintCtrl.text = resolveChiefComplaint('EYES');
+                                }
                               });
                             },
                             isDark: isDark,
@@ -911,8 +1035,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                             onTap: () {
                               setSheetState(() {
                                 selectedDept = 'BOTH';
-                                selectedDoctor = null;
-                                selectedRoom = null;
+                                selectedDoctor = resolveDoctor('BOTH');
+                                selectedRoom = resolveRoom('BOTH', selectedDoctor);
                               });
                             },
                             isDark: isDark,
@@ -2078,7 +2202,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                           ),
                         ),
                         Text(
-                          'Timeline of registrations, consultations & follow-ups',
+                          'Timeline of registrations, check-ins & visits',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -2182,13 +2306,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                     }
                     allVisits.sort((a, b) => b.visitDate.compareTo(a.visitDate));
 
-                    final regCount = allVisits.where((v) => v.isRegistration).length;
-                    final consultCount = allVisits.where((v) => v.isConsultation).length;
-                    final otherCount = allVisits.where((v) => v.isOther).length;
+                    // Exclude clinical consultations (organized under Department Records above)
+                    final nonConsultVisits = allVisits.where((v) => !v.isConsultation).toList();
 
-                    final displayedVisits = allVisits.where((v) {
+                    final regCount = nonConsultVisits.where((v) => v.isRegistration).length;
+                    final otherCount = nonConsultVisits.where((v) => v.isOther).length;
+
+                    final displayedVisits = nonConsultVisits.where((v) {
                       if (_visitFilter == 'REGISTERED') return v.isRegistration;
-                      if (_visitFilter == 'CONSULTATIONS') return v.isConsultation;
                       if (_visitFilter == 'OTHERS') return v.isOther;
                       return true;
                     }).toList();
@@ -2196,14 +2321,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Filter Pills: All, Registered, Consultations, Others
+                        // Filter Pills: All, Registered, Others (Consultations shown in Department Records)
                         SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: Row(
                             children: [
                               _buildVisitFilterChip(
                                 label: 'All',
-                                count: allVisits.length,
+                                count: nonConsultVisits.length,
                                 value: 'ALL',
                                 color: AppColors.primary,
                                 isDark: isDark,
@@ -2214,14 +2339,6 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                 count: regCount,
                                 value: 'REGISTERED',
                                 color: const Color(0xFF10B981), // Emerald
-                                isDark: isDark,
-                              ),
-                              const SizedBox(width: 8),
-                              _buildVisitFilterChip(
-                                label: 'Consultations',
-                                count: consultCount,
-                                value: 'CONSULTATIONS',
-                                color: AppColors.brandBlue,
                                 isDark: isDark,
                               ),
                               const SizedBox(width: 8),
@@ -2599,6 +2716,124 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
               ),
             ),
           ],
+
+          // Notes, findings & triage vital signs
+          if (visit.notes != null && visit.notes!.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _buildVisitNotesView(context, visit.notes!.trim(), isDark),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVisitNotesView(BuildContext context, String notes, bool isDark) {
+    final titleColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final subtitleColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
+    final hasVitals = notes.contains('[TRIAGE VITAL SIGNS]');
+    final hasFindings = notes.contains('[SPECIALTY FINDINGS]');
+    final hasRx = notes.contains('Prescription') || notes.contains('Rx:');
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: (isDark ? Colors.black : Colors.white).withValues(alpha: isDark ? 0.25 : 0.6),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark ? Colors.white12 : Colors.grey.shade300,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                'Clinical Notes & Findings',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: titleColor,
+                ),
+              ),
+              if (hasVitals)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.monitor_heart_rounded, size: 10, color: Colors.redAccent),
+                      SizedBox(width: 3),
+                      Text(
+                        'Vitals Attached',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.redAccent,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (hasFindings)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.cyanCalm.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'Specialty Exam',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.cyanCalm,
+                    ),
+                  ),
+                ),
+              if (hasRx)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.teal.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.medication_rounded, size: 10, color: Colors.teal),
+                      SizedBox(width: 3),
+                      Text(
+                        'Rx Attached',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.teal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          SelectableText(
+            notes,
+            style: TextStyle(
+              fontSize: 11.5,
+              height: 1.4,
+              color: subtitleColor,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );

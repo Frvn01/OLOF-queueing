@@ -145,7 +145,7 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen>
             const Tab(icon: Icon(Icons.person_pin_rounded, size: 18), text: 'Demographics & Vitals'),
             Tab(
               icon: const Icon(Icons.draw_rounded, size: 18),
-              text: 'Nurse Drawings & Exams (${_exams.length})',
+              text: 'Clinical Drawings & Exams (${_exams.length})',
             ),
             Tab(
               icon: const Icon(Icons.history_rounded, size: 18),
@@ -265,7 +265,12 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen>
                             style: TextStyle(color: Colors.grey),
                           ),
                         )
-                      else
+                      else ...[
+                        const Text(
+                          'General Vital Signs',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 8),
                         Wrap(
                           spacing: 16,
                           runSpacing: 14,
@@ -278,6 +283,60 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen>
                             _buildVitalTile('Respiratory Rate', '${v.respiratoryRate ?? '—'}', 'cpm', Icons.air_rounded),
                           ],
                         ),
+                        if (v.hasEyeVitals) ...[
+                          const SizedBox(height: 16),
+                          const Row(
+                            children: [
+                              Icon(Icons.visibility_rounded, color: AppColors.eyesColor, size: 16),
+                              SizedBox(width: 6),
+                              Text(
+                                'Specialized Ophthalmic Vitals (Eyes Clinic)',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.eyesColor),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 16,
+                            runSpacing: 14,
+                            children: [
+                              _buildVitalTile('Visual Acuity (OD)', v.visualAcuityOD ?? '—', 'Right Eye', Icons.remove_red_eye_rounded),
+                              _buildVitalTile('Visual Acuity (OS)', v.visualAcuityOS ?? '—', 'Left Eye', Icons.remove_red_eye_rounded),
+                              _buildVitalTile('IOP (OD)', v.intraocularPressureOD ?? '—', 'mmHg (OD)', Icons.speed_rounded),
+                              _buildVitalTile('IOP (OS)', v.intraocularPressureOS ?? '—', 'mmHg (OS)', Icons.speed_rounded),
+                              if (v.funduscopyOD != null || v.funduscopyOS != null) ...[
+                                _buildVitalTile('Funduscopy (OD)', v.funduscopyOD ?? '—', 'Right Fundus', Icons.remove_red_eye_outlined),
+                                _buildVitalTile('Funduscopy (OS)', v.funduscopyOS ?? '—', 'Left Fundus', Icons.remove_red_eye_outlined),
+                              ],
+                              if (v.extraocularMuscleMovement != null && v.extraocularMuscleMovement!.isNotEmpty)
+                                _buildVitalTile('EOMM', v.extraocularMuscleMovement!, 'Movement', Icons.open_with_rounded),
+                            ],
+                          ),
+                        ],
+                        if (v.notes != null && v.notes!.trim().isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.note_alt_rounded, size: 16, color: Colors.amber),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Nurse Triage Note: ${v.notes!}',
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ],
                   ),
                 ),
@@ -658,14 +717,70 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen>
                     'Complaint: ${visit.chiefComplaint}',
                     style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
                   ),
-                if (visit.notes != null && visit.notes!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      'Clinical Notes:\n${visit.notes}',
-                      style: TextStyle(color: Colors.grey.shade800, fontSize: 13),
+                if (visit.notes != null && visit.notes!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            const Text(
+                              'Clinical Record & Triage Vitals',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                            if (visit.notes!.contains('[TRIAGE VITAL SIGNS]'))
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.monitor_heart_rounded, size: 10, color: Colors.redAccent),
+                                    SizedBox(width: 3),
+                                    Text(
+                                      'Vitals Saved',
+                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.redAccent),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (visit.notes!.contains('Prescription') || visit.notes!.contains('Rx:'))
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.teal.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'Rx Attached',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.teal),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        SelectableText(
+                          visit.notes!,
+                          style: TextStyle(color: Colors.grey.shade800, fontSize: 12.5, height: 1.4),
+                        ),
+                      ],
                     ),
                   ),
+                ],
               ],
             ),
           ),

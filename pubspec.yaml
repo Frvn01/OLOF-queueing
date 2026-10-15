@@ -39,6 +39,7 @@ dependencies:
 
   # File and Path Utilities
   path_provider: ^2.1.2
+  file_selector: ^1.0.3
 
   # Utilities
   uuid: ^4.5.1
@@ -57,6 +58,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/logo.jpg
     - assets/
     - assets/sounds/
     - assets/diagrams/

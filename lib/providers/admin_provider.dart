@@ -439,14 +439,15 @@ class AdminProvider extends ChangeNotifier {
     }
   }
 
-  /// Get all other waiting patients (after the next patient)
+  /// Get all other waiting or triage patients (excluding serving and next)
   List<QueueEntry> getDoctorOtherWaiting(List<QueueEntry> queue, String doctorName, String department) {
     final docQueue = getQueueForDoctor(queue, doctorName, department);
-    final waiting = docQueue.where((e) => e.isWaiting || e.isOnHold).toList();
-    if (waiting.length > 1) {
-      return waiting.sublist(1);
-    }
-    return [];
+    final next = getDoctorNext(queue, doctorName, department);
+    return docQueue.where((e) {
+      if (e.isServing) return false;
+      if (next != null && e.id == next.id) return false;
+      return e.isWaiting || e.isOnHold || e.isTriage;
+    }).toList();
   }
 
   /// Reassign patient to a different doctor or room

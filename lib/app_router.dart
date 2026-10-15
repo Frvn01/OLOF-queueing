@@ -38,8 +38,14 @@ bool get _isDisplayPlatform {
 /// - Web: Strictly Client TV Display Screen
 /// - Desktop: TV Display + Unlocked Nurse & Staff Modules
 /// - Mobile / Tablet: Receptionist, Ophtha Dept & Nurse Staff Kiosks
-final GoRouter appRouter = GoRouter(
-  initialLocation: kIsWeb ? '/display' : '/',
+String _initialRoute = kIsWeb ? '/display' : '/';
+
+void setInitialRoute(String route) {
+  _initialRoute = route;
+}
+
+GoRouter createAppRouter({String? initialLocation}) => GoRouter(
+  initialLocation: initialLocation ?? _initialRoute,
   routes: [
     GoRoute(
       path: '/',
@@ -250,3 +256,5 @@ final GoRouter appRouter = GoRouter(
     ),
   ],
 );
+
+GoRouter appRouter = createAppRouter();

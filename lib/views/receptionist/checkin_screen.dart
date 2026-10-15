@@ -154,6 +154,30 @@ class _CheckinScreenState extends State<CheckinScreen> {
       if (match.chiefComplaint != null && match.chiefComplaint!.isNotEmpty) {
         _chiefComplaintController.text = match.chiefComplaint!;
       }
+
+      // Auto-fill doctor from the dept record if not already chosen
+      if (_selectedDoctor == null &&
+          match.assignedDoctor != null &&
+          match.assignedDoctor!.isNotEmpty) {
+        final clinic = context.read<ClinicProvider>();
+        try {
+          _selectedDoctor = clinic.doctors.firstWhere(
+            (d) => d.name.toLowerCase() == match.assignedDoctor!.toLowerCase(),
+          );
+        } catch (_) {}
+      }
+
+      // Auto-fill room from the dept record if not already chosen
+      if (_selectedRoom == null &&
+          match.assignedRoom != null &&
+          match.assignedRoom!.isNotEmpty) {
+        final clinic = context.read<ClinicProvider>();
+        try {
+          _selectedRoom = clinic.rooms.firstWhere(
+            (r) => r.name.toLowerCase() == match.assignedRoom!.toLowerCase(),
+          );
+        } catch (_) {}
+      }
     } catch (_) {
       _activeDeptRecord = null;
       _isFirstVisitToSelectedDept = _patientDeptRecords.isNotEmpty;

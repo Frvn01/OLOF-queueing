@@ -1,11 +1,12 @@
+import 'dart:io';
 import 'dart:ui' as ui;
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/theme/app_colors.dart';
-import '../../data/services/local_storage_service.dart';
 import '../../providers/admin_provider.dart';
 import 'olof_logo.dart';
 
@@ -96,28 +97,52 @@ class _StaffQrBadgeDialogWidgetState extends State<_StaffQrBadgeDialogWidget> {
     }
   }
 
-  Future<void> _saveBadgeLocally() async {
+  Future<void> _saveBadgeWithPicker() async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Save not supported on web. Use Print instead.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
     try {
       final bytes = await _captureBadgePng();
       if (bytes == null) throw Exception('Could not render badge image');
 
-      final path = await LocalStorageService.instance.saveStaffBadgeLocally(
-        staffId: widget.staff.id,
-        staffName: widget.staff.name,
-        bytes: bytes,
+      // Build a suggested filename
+      final cleanName = widget.staff.name.replaceAll(RegExp(r'[^a-zA-Z0-9 ]'), '_');
+      final suggestedName = 'QR_Badge_$cleanName.png';
+
+      // Open native Save File dialog
+      final FileSaveLocation? result = await getSaveLocation(
+        suggestedName: suggestedName,
+        acceptedTypeGroups: [
+          const XTypeGroup(
+            label: 'PNG Image',
+            extensions: ['png'],
+            mimeTypes: ['image/png'],
+          ),
+        ],
       );
 
-      setState(() {
-        _isSaving = false;
-      });
+      if (result == null) {
+        // User cancelled
+        setState(() => _isSaving = false);
+        return;
+      }
 
+      final file = File(result.path);
+      await file.writeAsBytes(bytes, flush: true);
+
+      setState(() => _isSaving = false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            path.isNotEmpty ? 'Badge saved to: $path' : 'Badge image captured successfully!',
-          ),
+          content: Text('Badge saved to: ${result.path}'),
           backgroundColor: AppColors.success,
           action: SnackBarAction(
             label: 'OK',
@@ -139,7 +164,6 @@ class _StaffQrBadgeDialogWidgetState extends State<_StaffQrBadgeDialogWidget> {
   }
 
   void _printBadge() {
-    // Show high-contrast print layout
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -165,7 +189,7 @@ class _StaffQrBadgeDialogWidgetState extends State<_StaffQrBadgeDialogWidget> {
             ),
             const SizedBox(height: 14),
             const Text(
-              'You can save the PNG file to your computer and send it to any network or photo printer.',
+              'Save the PNG first, then send it to your printer.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
@@ -178,10 +202,10 @@ class _StaffQrBadgeDialogWidgetState extends State<_StaffQrBadgeDialogWidget> {
           ElevatedButton.icon(
             onPressed: () {
               Navigator.pop(ctx);
-              _saveBadgeLocally();
+              _saveBadgeWithPicker();
             },
             icon: const Icon(Icons.download_rounded, size: 16),
-            label: const Text('Save PNG to Print'),
+            label: const Text('Save PNG...'),
           ),
         ],
       ),
@@ -401,15 +425,15 @@ class _StaffQrBadgeDialogWidgetState extends State<_StaffQrBadgeDialogWidget> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: _isSaving ? null : _saveBadgeLocally,
+                      onPressed: _isSaving ? null : _saveBadgeWithPicker,
                       icon: _isSaving
                           ? const SizedBox(
                               width: 14,
                               height: 14,
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                             )
-                          : const Icon(Icons.download_rounded, size: 16),
-                      label: Text(_isSaving ? 'Saving...' : 'Save Image (PNG)'),
+                          : const Icon(Icons.save_alt_rounded, size: 16),
+                      label: Text(_isSaving ? 'Saving...' : 'Save As...'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: color,
                         foregroundColor: Colors.white,

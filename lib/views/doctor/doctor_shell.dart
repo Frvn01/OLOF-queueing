@@ -9,6 +9,7 @@ import '../../providers/doctor_provider.dart';
 import '../../providers/queue_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../shared/widgets/olof_logo.dart';
+import '../../shared/widgets/doctor_switcher_dialog.dart';
 
 import 'doctor_dashboard_screen.dart';
 import 'doctor_patients_screen.dart';
@@ -284,77 +285,103 @@ class _DoctorShellState extends State<DoctorShell> {
                             ),
                           ),
                         ),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () => _onTabSelected(6), // Profile tab
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: (isDark ? const Color(0xFF065F46) : const Color(0xFFDCFCE7))
-                                  .withValues(alpha: 0.6),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: const Color(0xFF059669),
-                                  backgroundImage: (doctorProv.photoUrl != null && doctorProv.photoUrl!.isNotEmpty)
-                                      ? _getDoctorImageProvider(doctorProv.photoUrl!)
-                                      : null,
-                                  child: (doctorProv.photoUrl != null && doctorProv.photoUrl!.isNotEmpty)
-                                      ? null
-                                      : Text(
-                                          doctorProv.activeDoctor.isNotEmpty
-                                              ? doctorProv.activeDoctor
-                                                  .replaceAll('Dr. ', '')
-                                                  .replaceAll('DR. ', '')
-                                                  .trim()[0]
-                                              : 'D',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                          ),
-                                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Switch Doctor / Scan QR Badge Action Button
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () => DoctorSwitcherDialog.show(context),
+                                icon: const Icon(Icons.switch_account_rounded, size: 16),
+                                label: const Text(
+                                  'Switch Doctor / QR',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        doctorProv.formattedDoctorName,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12,
-                                          color: isDark ? Colors.white : const Color(0xFF064E3B),
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        '${doctorProv.activeDepartment} • ${doctorProv.activeRoom}',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          color: isDark
-                                              ? const Color(0xFF6EE7B7)
-                                              : const Color(0xFF059669),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: isDark ? const Color(0xFFA7F3D0) : const Color(0xFF065F46),
+                                  side: BorderSide(
+                                    color: isDark ? const Color(0xFF059669) : const Color(0xFF10B981),
                                   ),
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.logout_rounded, size: 18),
-                                  tooltip: 'Exit to Kiosk Portal',
-                                  color: isDark ? Colors.white70 : const Color(0xFF065F46),
-                                  onPressed: () => context.go('/'),
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 8),
+                            InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => DoctorSwitcherDialog.show(context),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: (isDark ? const Color(0xFF065F46) : const Color(0xFFDCFCE7))
+                                      .withValues(alpha: 0.6),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor: const Color(0xFF059669),
+                                      backgroundImage: (doctorProv.photoUrl != null && doctorProv.photoUrl!.isNotEmpty)
+                                          ? _getDoctorImageProvider(doctorProv.photoUrl!)
+                                          : null,
+                                      child: (doctorProv.photoUrl != null && doctorProv.photoUrl!.isNotEmpty)
+                                          ? null
+                                          : Text(
+                                              doctorProv.activeDoctor.isNotEmpty
+                                                  ? doctorProv.activeDoctor
+                                                      .replaceAll('Dr. ', '')
+                                                      .replaceAll('DR. ', '')
+                                                      .trim()[0]
+                                                  : 'D',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            doctorProv.formattedDoctorName,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                              color: isDark ? Colors.white : const Color(0xFF064E3B),
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            '${doctorProv.activeDepartment} • ${doctorProv.activeRoom}',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: isDark
+                                                  ? const Color(0xFF6EE7B7)
+                                                  : const Color(0xFF059669),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.logout_rounded, size: 18),
+                                      tooltip: 'Exit to Kiosk Portal',
+                                      color: isDark ? Colors.white70 : const Color(0xFF065F46),
+                                      onPressed: () => context.go('/'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -460,6 +487,11 @@ class _DoctorShellState extends State<DoctorShell> {
                           ),
                         ],
                       ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.switch_account_rounded, color: AppColors.primary),
+                      tooltip: 'Switch Doctor / QR',
+                      onPressed: () => DoctorSwitcherDialog.show(context),
                     ),
                     IconButton(
                       icon: const Icon(Icons.refresh_rounded, color: AppColors.primary),
