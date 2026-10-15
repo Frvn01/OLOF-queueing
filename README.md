@@ -254,6 +254,6 @@ The receptionist module can print 58 mm queue slips directly to a thermal printe
 - **Specialists:**
   - **Dr. Lorenzo Vera Cruz** — ENT (Ear, Nose & Throat) Specialist
   - **Dr. Ian J. Daguman** — Ophthalmology (Eyes) Specialist
--**Developed By:** CREST - Cloud Resources Engineering Software & Technology
+- **Developed By:** CREST - Cloud Resources Engineering Software & Technology
 - **Developed For:** OLOF EENT Clinical Team & Patients
 
